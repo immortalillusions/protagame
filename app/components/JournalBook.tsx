@@ -87,13 +87,11 @@ function Page({
 }) {
   const [hovered, setHovered] = useState(false);
   const [editText, setEditText] = useState(content);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     setEditText(content);
   }, [content]);
-
-  // When editing starts, focus is handled by the autoFocus prop in textarea
-  // No need for separate state to toggle visibility based on typing
 
   const xPos = isLeft ? -0.75 : 0.75;
 
@@ -104,6 +102,30 @@ function Page({
     } else if (e.key === "Escape") {
       e.preventDefault();
       onCancel();
+    }
+  };
+
+  const handleGenerateStory = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsGenerating(true);
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Write a short, creative journal entry for ${date}. Keep it under 100 words.`,
+        }),
+      });
+      const data = await response.json();
+      if (data.response) {
+        setEditText((prev) =>
+          prev ? prev + "\n\n" + data.response : data.response,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to generate story:", error);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -165,45 +187,122 @@ function Page({
 
       {/* Editor */}
       {isEditing && (
-        <Html position={[0, -0.05, 0.02]} transform distanceFactor={1.5} center>
-          <div
-            // Size maximized to fill the page geometry
-            style={{ width: "290px", height: "390px", pointerEvents: "auto" }}
-            onClick={(e) => e.stopPropagation()}
+        <>
+          {/* Main Editor Text Area - Centered on Page */}
+          <Html
+            position={[0, -0.05, 0.02]}
+            transform
+            distanceFactor={1.5}
+            center
+            style={{ width: "290px", height: "390px" }}
           >
-            <textarea
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Write about your day..."
-              autoFocus
+            <div
               style={{
                 width: "100%",
                 height: "100%",
-                padding: "20px",
-                backgroundColor: "rgba(254, 252, 247, 0.98)",
-                border: "none",
-                borderRadius: "2px",
-                color: "#444",
-                fontSize: "14px",
-                fontFamily: "Georgia, serif",
-                lineHeight: "1.6",
-                resize: "none",
-                outline: "none",
+                pointerEvents: "auto",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
               }}
-            />
-            <p
+              onClick={(e) => e.stopPropagation()}
+            >
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Write about your day..."
+                autoFocus
+                style={{
+                  flex: 1,
+                  width: "100%",
+                  padding: "20px",
+                  paddingBottom: "20px",
+                  backgroundColor: "rgba(254, 252, 247, 0.98)",
+                  border: "1px solid #d4c4a8",
+                  borderRadius: "4px",
+                  color: "#444",
+                  fontSize: "14px",
+                  fontFamily: "Georgia, serif",
+                  lineHeight: "1.6",
+                  resize: "none",
+                  outline: "none",
+                  boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                }}
+              />
+
+              <p
+                style={{
+                  position: "absolute",
+                  bottom: "5px",
+                  left: "0",
+                  right: "0",
+                  fontSize: "10px",
+                  color: "#b8a88a",
+                  textAlign: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                Enter ↵ save • Esc cancel
+              </p>
+            </div>
+          </Html>
+
+          {/* Generate Story Button - Fixed at Top Left of Screen */}
+          <Html position={[0, 0, 0]} style={{ pointerEvents: "none" }}>
+            <div
               style={{
-                fontSize: "8px",
-                color: "#b8a88a",
-                textAlign: "center",
-                marginTop: "2px",
+                position: "fixed",
+                top: "20px",
+                left: "20px",
+                zIndex: 1000,
+                pointerEvents: "auto",
+                transform: "translate(-50vw, -50vh)", // Reset position relative to screen center if needed, but fixed usually handles it.
+                // Note: Html without transform renders into a div that might be centered.
+                // To get true top-left of screen, we often need `fullscreen` prop or specific css hacks.
+                // Let's use a portal to document.body to break out of the canvas container completely.
               }}
             >
-              Enter ↵ save • Esc cancel
-            </p>
-          </div>
-        </Html>
+              {/* Note: In standard R3F, Html components are positioned relative to the 3D object unless `fullscreen` or `portal` is used.
+                  However, simple fixed positioning often works if we render it. 
+                  Let's try standard Html with inline styles for fixed positioning relative to viewport. 
+              */}
+            </div>
+          </Html>
+          {/* Actually, simpler approach: The Html component places content in a div on top of the canvas.
+             If we use `fullscreen`, it covers the whole screen area.
+          */}
+          <Html fullscreen style={{ pointerEvents: "none" }}>
+            <button
+              onClick={handleGenerateStory}
+              disabled={isGenerating}
+              style={{
+                position: "absolute",
+                top: "20px",
+                left: "20px",
+                padding: "10px 20px",
+                backgroundColor: isGenerating ? "#ccc" : "#8c7b6c",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "14px",
+                cursor: isGenerating ? "wait" : "pointer",
+                fontFamily: "sans-serif",
+                fontWeight: "bold",
+                boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                transition: "all 0.2s",
+                pointerEvents: "auto", // Re-enable clicks
+                zIndex: 2000,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span>✨</span>
+              {isGenerating ? "Generating Story..." : "Generate Story"}
+            </button>
+          </Html>
+        </>
       )}
 
       {/* Content */}
@@ -225,7 +324,7 @@ function Page({
             <Text
               position={[0, 0, 0.02]}
               fontSize={0.06}
-              color="#white"
+              color="#ccc"
               anchorX="center"
             >
               Click to write
