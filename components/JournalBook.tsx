@@ -37,7 +37,7 @@ export default function JournalBook() {
     try {
       const response = await fetch(`/api/journal?date=${dateStr}`);
       const data = await response.json();
-      
+
       if (data.success && data.entry) {
         setEntry(data.entry);
         setContent(data.entry.content);
@@ -57,7 +57,7 @@ export default function JournalBook() {
       try {
         const response = await fetch(`/api/journal?date=${dateStr}`);
         const data = await response.json();
-        
+
         if (data.success && data.entry) {
           setEntry(data.entry);
           setContent(data.entry.content);
@@ -71,7 +71,7 @@ export default function JournalBook() {
         setContent('');
       }
     };
-    
+
     loadData();
   }, [dateStr]);
 
@@ -120,7 +120,7 @@ export default function JournalBook() {
       });
 
       const data = await response.json();
-      
+
       if (data.success && data.visualPrompt) {
         // Save the journal entry with both visual prompt and media URL if available
         const updatedEntry = {
@@ -142,7 +142,7 @@ export default function JournalBook() {
           // Reload the entry to get the updated data
           const reloadResponse = await fetch(`/api/journal?date=${dateStr}`);
           const reloadData = await reloadResponse.json();
-          
+
           if (reloadData.success && reloadData.entry) {
             setEntry(reloadData.entry);
           }
@@ -172,7 +172,7 @@ export default function JournalBook() {
 
     const saveContent = async () => {
       if (isSaving) return;
-      
+
       setIsSaving(true);
       try {
         const response = await fetch('/api/journal', {
@@ -204,141 +204,150 @@ export default function JournalBook() {
   }, [content, dateStr, entry?.visualPrompt, entry?.mediaUrl, isSaving]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-amber-950 dark:via-orange-950 dark:to-yellow-950 p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Book Container */}
-        <div className="relative">
-          {/* Book Shadow */}
-          <div className="absolute inset-0 bg-black/20 rounded-lg transform rotate-1 translate-x-2 translate-y-2"></div>
-          
-          {/* Book */}
-          <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-2xl overflow-hidden border-8 border-amber-100 dark:border-amber-900">
-            
-            {/* Book Binding */}
-            <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-amber-600 to-amber-700 border-r-2 border-amber-800">
-              <div className="absolute inset-y-0 left-2 w-0.5 bg-amber-800 opacity-50"></div>
-              <div className="absolute inset-y-0 left-4 w-0.5 bg-amber-300 opacity-30"></div>
-            </div>
+    <div className="min-h-screen bg-[var(--c-tan)] p-8 flex items-center justify-center overflow-hidden">
+      {/* Ambient environment light */}
+      <div className="fixed inset-0 pointer-events-none bg-gradient-radial from-[var(--c-cream)]/20 to-[var(--c-ink)]/5" />
 
-            {/* Page Content */}
-            <div className="pl-20 pr-12 py-12">
-              
-              {/* Date Navigation */}
-              <div className="flex items-center justify-between mb-8">
+      <div className="max-w-6xl w-full mx-auto relative perspective-container z-10">
+
+        {/* Book Container - The Physical Object */}
+        <div className="relative layer-3d group">
+
+          {/* 1. Base Shadow (The desk contact) */}
+          <div className="absolute top-4 left-4 right-[-10px] bottom-[-10px] bg-[var(--c-shadow-warm)]/20 blur-xl rounded-lg transform translate-z-[-20px]" />
+
+          {/* 2. Back Cover (Thick leather/hardcover base) */}
+          <div className="absolute inset-0 bg-[#3a2e22] rounded-r-xl rounded-l-md transform translate-z-[-5px] shadow-2xl border-l-[12px] border-[#2a2118]" />
+
+          {/* 3. The Paper Block (Main writing surface) */}
+          <div className="relative bg-[var(--c-cream)] rounded-r-lg min-h-[80vh] shadow-[inset_10px_0_20px_rgba(0,0,0,0.05)] border-r-4 border-[#e6e2d6] paper-texture flex overflow-hidden">
+
+            {/* Spine/Gutter Shadow */}
+            <div className="absolute left-0 top-0 bottom-0 w-16 bg-[image:var(--spine-gradient)] pointer-events-none z-20 mix-blend-multiply" />
+
+            {/* Content Container */}
+            <div className="flex-1 pl-16 pr-12 py-12 flex flex-col relative z-10">
+
+              {/* Header: Date Navigation */}
+              <div className="flex items-center justify-between mb-10 pb-6 border-b border-[var(--c-gold)]/30">
                 <button
                   onClick={() => navigateDate('prev')}
-                  className="p-2 text-amber-600 hover:text-amber-800 transition-colors"
+                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
                   title="Previous day"
                 >
-                  ← Previous
+                  <span className="font-serif text-xl">←</span>
                 </button>
-                
-                <h1 className="text-2xl font-serif text-amber-900 dark:text-amber-100">
-                  {displayDate}
-                </h1>
-                
+
+                <div className="text-center group-hover:transform group-hover:translate-z-[5px] transition-transform duration-500">
+                  <h1 className="text-3xl font-serif text-[var(--c-ink)] text-engraved tracking-wide">
+                    {displayDate}
+                  </h1>
+                  <div className="h-1 w-24 mx-auto mt-2 bg-gradient-to-r from-transparent via-[var(--c-gold)]/40 to-transparent" />
+                </div>
+
                 <button
                   onClick={() => navigateDate('next')}
-                  className="p-2 text-amber-600 hover:text-amber-800 transition-colors"
+                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
                   title="Next day"
                   disabled={format(currentDate, 'yyyy-MM-dd') >= format(new Date(), 'yyyy-MM-dd')}
                 >
-                  Next →
+                  <span className="font-serif text-xl">→</span>
                 </button>
               </div>
 
-              {/* Media Generation Button */}
-              <div className="mb-6">
-                <button
-                  onClick={generateMedia}
-                  disabled={isGeneratingMedia || !content.trim()}
-                  className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 text-white rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center font-bold text-lg"
-                  title="Generate cinematic moment for this day"
-                >
-                  {isGeneratingMedia ? '⏳' : '🎬'}
-                </button>
-                
-                {entry?.visualPrompt && (
-                  <div className="mt-4 space-y-4">
-                    {/* Generated Image */}
-                    {entry.mediaUrl && (
-                      <div className="relative rounded-lg overflow-hidden border-2 border-purple-200 dark:border-purple-800 shadow-lg">
-                        <Image
-                          src={entry.mediaUrl}
-                          alt="Generated cinematic scene"
-                          width={400}
-                          height={200}
-                          className="w-full h-48 object-cover"
-                          unoptimized={true} // For external URLs and local generated images
-                          onError={(e) => {
-                            console.error('Image failed to load:', entry.mediaUrl);
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                        <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                          Generated by FLUX.2 Klein
+              {/* Main Content Area - 2 Column Layout */}
+              <div className="flex-1 flex gap-12 relative">
+
+                {/* Left Column: Text Area */}
+                <div className="flex-1 flex flex-col min-w-0">
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="What is on your mind today?"
+                    className="w-full flex-1 bg-transparent border-none outline-none resize-none 
+                      font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
+                      selection:bg-[var(--c-gold)]/20"
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(
+                        transparent,
+                        transparent 1.95rem,
+                        rgba(212, 175, 55, 0.2) 1.95rem,
+                        rgba(212, 175, 55, 0.2) 2rem
+                      )`,
+                      backgroundAttachment: 'local'
+                    }}
+                  />
+
+                  {/* Status Bar inside the text column */}
+                  <div className="mt-4 flex items-center justify-between text-xs font-serif text-[var(--c-ink-light)] italic opacity-60">
+                    <span>{isSaving ? 'Saving...' : lastSaved ? `Last saved at ${format(lastSaved, 'h:mm a')}` : 'Unsaved changes'}</span>
+                    <span className="font-mono opacity-60">{content.length} chars</span>
+                  </div>
+                </div>
+
+                {/* Right Column: Visual Component & Controls */}
+                <div className="w-80 flex flex-col gap-8 shrink-0 relative z-20">
+
+                  {/* Visual Prompt Card */}
+                  {entry?.visualPrompt ? (
+                    <div className="w-full bg-white p-3 shadow-lg transform rotate-1 hover:rotate-0 transition-all duration-500 border border-[var(--c-tan)] lift-on-hover">
+                      {entry.mediaUrl && (
+                        <div className="relative aspect-video mb-3 overflow-hidden bg-[var(--c-tan)]">
+                          <Image
+                            src={entry.mediaUrl}
+                            alt="Cinematic scene"
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <p className="font-serif text-sm text-[var(--c-ink)] leading-snug italic">
+                          "{entry.visualPrompt.visualPrompt}"
+                        </p>
+                        <div className="flex gap-1 flex-wrap pt-1 border-t border-[var(--c-tan)]">
+                          <span className="text-[10px] uppercase tracking-wider text-[var(--c-gold)] font-bold">
+                            {entry.visualPrompt.mood}
+                          </span>
                         </div>
                       </div>
-                    )}
-                    
-                    {/* Visual Prompt Details */}
-                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                      <h3 className="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-2">
-                        Cinematic Vision
-                      </h3>
-                      <p className="text-sm text-purple-700 dark:text-purple-300 mb-2">
-                        <strong>Scene:</strong> {entry.visualPrompt.visualPrompt}
-                      </p>
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <span className="bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-2 py-1 rounded">
-                          {entry.visualPrompt.mood}
-                        </span>
-                        <span className="bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-2 py-1 rounded">
-                          {entry.visualPrompt.colorPalette}
-                        </span>
-                        <span className="bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-2 py-1 rounded">
-                          {entry.visualPrompt.cinematicStyle}
-                        </span>
-                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Journal Entry */}
-              <div className="space-y-4">
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Dear diary, today..."
-                  className="w-full h-96 p-4 bg-transparent border-none outline-none resize-none font-serif text-lg leading-relaxed text-amber-900 dark:text-amber-100 placeholder-amber-400"
-                  style={{ 
-                    lineHeight: '1.8',
-                    backgroundImage: `repeating-linear-gradient(
-                      transparent,
-                      transparent 1.8rem,
-                      #d97706 1.8rem,
-                      #d97706 calc(1.8rem + 1px)
-                    )`,
-                  }}
-                />
-              </div>
-
-              {/* Status Bar */}
-              <div className="flex justify-between items-center mt-6 text-xs text-amber-600 dark:text-amber-400">
-                <div>
-                  {isSaving && <span>Saving...</span>}
-                  {lastSaved && !isSaving && (
-                    <span>Last saved: {format(lastSaved, 'h:mm a')}</span>
+                  ) : (
+                    /* Placeholder area if no image yet, to maintain balance or show empty state */
+                    <div className="w-full aspect-[4/5] border-2 border-dashed border-[var(--c-gold)]/20 rounded-sm flex items-center justify-center">
+                      <span className="text-[var(--c-gold)]/40 font-serif italic text-2xl">?</span>
+                    </div>
                   )}
-                </div>
-                <div>
-                  {content.length} characters
+
+                  {/* Generation Button */}
+                  <button
+                    onClick={generateMedia}
+                    disabled={isGeneratingMedia || !content.trim()}
+                    className="
+                      w-full group relative px-6 py-4 bg-[var(--c-ink)] text-[var(--c-cream)] 
+                      font-serif text-sm tracking-widest uppercase text-center
+                      shadow-lg hover:shadow-xl disabled:opacity-50 disabled:shadow-none
+                      lift-on-hover press-on-click
+                      overflow-hidden rounded-sm
+                    "
+                  >
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      {isGeneratingMedia ? 'Dreaming...' : 'Visualize'}
+                      <span className="text-[var(--c-gold)]">✦</span>
+                    </span>
+                    <div className="absolute inset-0 bg-[var(--c-gold)]/10 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                  </button>
+
                 </div>
               </div>
-              
+
             </div>
+
+            {/* Page thickness effect on the right edge */}
+            <div className="absolute right-0 top-0 bottom-0 w-[4px] bg-gradient-to-l from-[#dcd8c8] to-transparent pointer-events-none" />
           </div>
+
         </div>
       </div>
     </div>
