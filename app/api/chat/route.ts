@@ -1,6 +1,6 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { NextRequest, NextResponse } from 'next/server';
-
+// THIS IS JUST TO TEST OPENROUTER
 const openRouter = new OpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
