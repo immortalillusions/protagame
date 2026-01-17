@@ -3,7 +3,8 @@ import { attachDatabasePool } from '@vercel/functions';
 
 const options: MongoClientOptions = {
   appName: "devrel.vercel.integration",
-  maxIdleTimeMS: 5000
+  maxIdleTimeMS: 5000,
+  maxPoolSize: 3
 };
 
 const uri: string = process.env.MONGODB_URI ?? (() => { throw new Error('MONGODB_URI environment variable is required'); })();
