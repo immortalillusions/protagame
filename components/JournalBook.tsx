@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { format, addDays, subDays } from "date-fns";
-import Image from "next/image";
-import GenerateStory from "../app/components/summary/generateStory";
+import { useState, useEffect } from 'react';
+import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
+import Image from 'next/image';
 
 interface VisualPrompt {
   visualPrompt: string;
@@ -29,6 +28,10 @@ export default function JournalBook() {
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarEntries, setCalendarEntries] = useState<Record<string, boolean>>({});
+  const [viewingMode, setViewingMode] = useState(false); // True when viewing an existing entry
 
   const dateStr = format(currentDate, "yyyy-MM-dd");
   const displayDate = format(currentDate, "MMMM d, yyyy");
@@ -179,7 +182,7 @@ export default function JournalBook() {
 
   // Auto-save functionality
   useEffect(() => {
-    if (!content.trim()) return;
+    if (!content.trim() || viewingMode) return;
 
     const saveContent = async () => {
       if (isSaving) return;
@@ -212,16 +215,182 @@ export default function JournalBook() {
     }, 2000); // Auto-save after 2 seconds of no typing
 
     return () => clearTimeout(timer);
-  }, [content, dateStr, entry?.visualPrompt, entry?.mediaUrl, isSaving]);
+  }, [content, dateStr, entry?.visualPrompt, entry?.mediaUrl, isSaving, viewingMode]);
+
+  // Load calendar entries for the current month
+  const loadCalendarEntries = async () => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+    const entries: Record<string, boolean> = {};
+    for (const day of daysInMonth) {
+      const dayStr = format(day, 'yyyy-MM-dd');
+      try {
+        const response = await fetch(`/api/journal?date=${dayStr}`);
+        const data = await response.json();
+        entries[dayStr] = data.success && data.entry ? true : false;
+      } catch {
+        entries[dayStr] = false;
+      }
+    }
+    setCalendarEntries(entries);
+  };
+
+  useEffect(() => {
+    if (showCalendar) {
+      loadCalendarEntries();
+    }
+  }, [showCalendar, calendarMonth]);
+
+  const handleCalendarDateSelect = async (selectedDate: Date) => {
+    const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+    setCurrentDate(selectedDate);
+    
+    // Check if entry exists
+    const response = await fetch(`/api/journal?date=${selectedDateStr}`);
+    const data = await response.json();
+    
+    if (data.success && data.entry) {
+      // Entry exists - show in viewing mode (read-only)
+      setEntry(data.entry);
+      setContent(data.entry.content);
+      setViewingMode(true);
+    } else {
+      // No entry - create new blank entry
+      setEntry(null);
+      setContent('');
+      setViewingMode(false);
+    }
+    
+    setShowCalendar(false);
+  };
+
+  const navigateCalendarMonth = (direction: 'prev' | 'next') => {
+    if (direction === 'prev') {
+      setCalendarMonth(subMonths(calendarMonth, 1));
+    } else {
+      setCalendarMonth(addMonths(calendarMonth, 1));
+    }
+  };
+
+  const renderCalendarGrid = () => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const startDate = new Date(monthStart);
+    startDate.setDate(startDate.getDate() - monthStart.getDay());
+
+    const days = [];
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(startDate));
+      startDate.setDate(startDate.getDate() + 1);
+    }
+
+    return days.map((day, index) => {
+      const dayStr = format(day, 'yyyy-MM-dd');
+      const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+      const hasEntry = calendarEntries[dayStr];
+
+      return (
+        <button
+          key={index}
+          onClick={() => handleCalendarDateSelect(day)}
+          className={`
+            aspect-square flex items-center justify-center rounded border-2 transition-all text-lg
+            ${isCurrentMonth 
+              ? 'bg-white text-[var(--c-ink)] border-[var(--c-gold)]/30 hover:border-[var(--c-gold)] hover:shadow-md' 
+              : 'bg-[var(--c-tan)]/30 text-[var(--c-ink-light)] border-transparent'
+            }
+            ${hasEntry ? 'font-bold text-[var(--c-gold)]' : ''}
+          `}
+        >
+          <span>{format(day, 'd')}</span>
+          {hasEntry && <span className="absolute text-sm mt-7">●</span>}
+        </button>
+      );
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[var(--c-tan)] p-8 flex items-center justify-center overflow-hidden">
-      {/* Generate Story Button - Floating */}
-      <GenerateStory
-        currentDate={currentDate}
-        onStoryGenerated={handleStoryGenerated}
-        currentJournalContent={content}
-      />
+      {/* Calendar Modal */}
+      {showCalendar && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full max-h-[95vh] flex flex-col">
+            {/* Calendar Header - Year Navigation */}
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--c-gold)]/30">
+              <button
+                onClick={() => setCalendarMonth(subMonths(calendarMonth, 12))}
+                className="p-2 hover:text-[var(--c-gold)] transition-colors text-sm font-serif"
+                title="Previous year"
+              >
+                ← Year
+              </button>
+              <h3 className="font-serif text-sm text-[var(--c-ink-light)]">
+                {format(calendarMonth, 'yyyy')}
+              </h3>
+              <button
+                onClick={() => setCalendarMonth(addMonths(calendarMonth, 12))}
+                className="p-2 hover:text-[var(--c-gold)] transition-colors text-sm font-serif"
+                title="Next year"
+              >
+                Year →
+              </button>
+            </div>
+
+            {/* Calendar Header - Month Navigation */}
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--c-gold)]/30">
+              <button
+                onClick={() => navigateCalendarMonth('prev')}
+                className="p-2 hover:text-[var(--c-gold)] transition-colors font-serif text-lg"
+                title="Previous month"
+              >
+                ←
+              </button>
+              <h2 className="font-serif text-lg text-[var(--c-ink)] min-w-[140px] text-center">
+                {format(calendarMonth, 'MMMM')}
+              </h2>
+              <button
+                onClick={() => navigateCalendarMonth('next')}
+                className="p-2 hover:text-[var(--c-gold)] transition-colors font-serif text-lg"
+                title="Next month"
+              >
+                →
+              </button>
+            </div>
+
+            {/* Day names */}
+            <div className="grid grid-cols-7 gap-3 mb-4">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="text-center text-sm font-bold text-[var(--c-ink-light)]">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-3 flex-1 overflow-y-auto">
+              {renderCalendarGrid()}
+            </div>
+
+            {/* Close Button */}
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => handleCalendarDateSelect(new Date())}
+                className="flex-1 py-2 bg-[#D4AF37] hover:bg-[#e0bb47] text-[var(--c-ink)] font-serif rounded transition-colors uppercase tracking-wider text-sm font-bold"
+              >
+                Present
+              </button>
+              <button
+                onClick={() => setShowCalendar(false)}
+                className="flex-1 py-2 bg-[#5a4838] hover:bg-[#6b5948] text-[var(--c-cream)] font-serif rounded transition-colors uppercase tracking-wider text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ambient environment light */}
       <div className="fixed inset-0 pointer-events-none bg-gradient-radial from-[var(--c-cream)]/20 to-[var(--c-ink)]/5" />
@@ -275,40 +444,36 @@ export default function JournalBook() {
               {/* Main Content Area - 2 Column Layout */}
               <div className="flex-1 flex gap-12 relative max-h-[calc(80vh-200px)] overflow-hidden">
                 {/* Left Column: Text Area */}
-                <div className="flex-1 flex flex-col min-w-0 scrollbar-thin">
-                  <div className="flex-1 overflow-hidden">
-                    <textarea
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder="What is on your mind today?"
-                      className="w-full h-full bg-transparent border-none outline-none resize-none 
-                        font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
-                        selection:bg-[var(--c-gold)]/20 pl-8 pr-4 py-2"
-                      style={{
-                        backgroundImage: `repeating-linear-gradient(
-                          transparent,
-                          transparent 1.95rem,
-                          rgba(212, 175, 55, 0.2) 1.95rem,
-                          rgba(212, 175, 55, 0.2) 2rem
-                        )`,
-                        backgroundAttachment: "local",
-                        backgroundPositionX: "2rem", // Offset the lines to account for left padding
-                      }}
-                    />
-                  </div>
+                <div className="flex-1 flex flex-col min-w-0">
+                  <textarea
+                    value={content}
+                    onChange={(e) => !viewingMode && setContent(e.target.value)}
+                    placeholder={viewingMode ? '' : "What is on your mind today?"}
+                    readOnly={viewingMode}
+                    className={`w-full flex-1 bg-transparent border-none outline-none resize-none 
+                      font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
+                      selection:bg-[var(--c-gold)]/20
+                      ${viewingMode ? 'cursor-default opacity-75' : 'cursor-text'}`}
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(
+                        transparent,
+                        transparent 1.95rem,
+                        rgba(212, 175, 55, 0.2) 1.95rem,
+                        rgba(212, 175, 55, 0.2) 2rem
+                      )`,
+                      backgroundAttachment: 'local'
+                    }}
+                  />
 
                   {/* Status Bar inside the text column */}
                   <div className="mt-4 flex items-center justify-between text-xs font-serif text-[var(--c-ink-light)] italic opacity-60">
                     <span>
-                      {isSaving
-                        ? "Saving..."
-                        : lastSaved
-                          ? `Last saved at ${format(lastSaved, "h:mm a")}`
-                          : "Unsaved changes"}
+                      {viewingMode 
+                        ? `Saved on ${entry ? format(new Date(entry.createdAt), 'MMM d, yyyy') : ''}` 
+                        : (isSaving ? 'Saving...' : lastSaved ? `Last saved at ${format(lastSaved, 'h:mm a')}` : 'Unsaved changes')
+                      }
                     </span>
-                    <span className="pl-4 font-mono opacity-60">
-                      {content.length} chars
-                    </span>
+                    <span className="font-mono opacity-60">{content.length} chars</span>
                   </div>
                 </div>
 
@@ -351,13 +516,13 @@ export default function JournalBook() {
                   {/* Generation Button */}
                   <button
                     onClick={generateMedia}
-                    disabled={isGeneratingMedia || !content.trim()}
+                    disabled={isGeneratingMedia || !content.trim() || viewingMode}
                     className="
-                      w-full group relative px-6 py-4 bg-[var(--c-ink)] text-[var(--c-cream)] 
+                      w-full group relative px-6 py-4 bg-[#1a1410] hover:bg-[#2C241B] text-[var(--c-cream)] 
                       font-serif text-sm tracking-widest uppercase text-center
                       shadow-lg hover:shadow-xl disabled:opacity-50 disabled:shadow-none
                       lift-on-hover press-on-click
-                      overflow-hidden rounded-sm
+                      overflow-hidden rounded-sm transition-colors duration-300
                     "
                   >
                     <span className="relative z-10 flex items-center justify-center gap-2">
@@ -366,6 +531,24 @@ export default function JournalBook() {
                     </span>
                     <div className="absolute inset-0 bg-[var(--c-gold)]/10 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                   </button>
+
+                  {/* Journey Navigation Calendar Button */}
+                  <button
+                    onClick={() => setShowCalendar(true)}
+                    className="
+                      w-full group relative px-6 py-4 bg-[#8ba8c8] hover:bg-[#99b5d6] text-[var(--c-ink)]
+                      font-serif text-sm tracking-widest uppercase text-center
+                      shadow-lg hover:shadow-xl
+                      lift-on-hover press-on-click
+                      overflow-hidden rounded-sm flex items-center justify-center gap-3
+                      transition-all duration-300
+                    "
+                  >
+                    <span className="text-2xl">🗺️</span>
+                    <span className="relative z-10">Journey Navigation</span>
+                    <div className="absolute inset-0 bg-[var(--c-ink)]/5 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                  </button>
+
                 </div>
               </div>
             </div>
