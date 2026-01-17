@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { format, addDays, subDays } from "date-fns";
 import Image from "next/image";
 import GenerateStory from "../app/components/summary/generateStory";
@@ -16,95 +16,207 @@ interface VisualPrompt {
 interface JournalEntry {
   date: string;
   content: string;
+  story?: string;
   visualPrompt?: VisualPrompt;
   mediaUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
 
+// Memoized textarea component to prevent re-renders during typing
+const OptimizedTextarea = memo(function OptimizedTextarea({
+  value,
+  onChange,
+  readOnly,
+  placeholder,
+  showStory
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  readOnly: boolean;
+  placeholder: string;
+  showStory: boolean;
+}) {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (!readOnly) {
+      onChange(e.target.value);
+    }
+  }, [onChange, readOnly]);
+
+  return (
+    <textarea
+      value={value}
+      onChange={handleChange}
+      readOnly={readOnly}
+      placeholder={placeholder}
+      className={`w-full h-full bg-transparent border-none outline-none resize-none 
+        font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
+        selection:bg-[var(--c-gold)]/20 pl-8 pr-4 py-2 ${showStory ? 'cursor-default' : ''}`}
+      style={{
+        backgroundImage: `repeating-linear-gradient(
+          transparent,
+          transparent 1.95rem,
+          rgba(212, 175, 55, 0.2) 1.95rem,
+          rgba(212, 175, 55, 0.2) 2rem
+        )`,
+        backgroundAttachment: "local",
+        backgroundPositionX: "2rem",
+      }}
+    />
+  );
+});
+
 export default function JournalBook() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [entry, setEntry] = useState<JournalEntry | null>(null);
-  const [content, setContent] = useState("");
+  const [entries, setEntries] = useState<Map<string, JournalEntry>>(new Map());
+  const [localContent, setLocalContent] = useState(""); // Local state for immediate updates
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [showStory, setShowStory] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [pendingSaves, setPendingSaves] = useState(new Set<string>());
 
   const dateStr = format(currentDate, "yyyy-MM-dd");
   const displayDate = format(currentDate, "MMMM d, yyyy");
+  
+  // Get current entry from cache
+  const currentEntry = entries.get(dateStr);
 
-  // Load journal entry for current date
-  const loadJournalEntry = async () => {
+  // Debounced save function that doesn't block UI
+  const debouncedSave = useMemo(() => {
+    const timeouts = new Map<string, NodeJS.Timeout>();
+    
+    return (date: string, content: string) => {
+      // Clear existing timeout for this date
+      const existingTimeout = timeouts.get(date);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+      
+      // Set new timeout for background save
+      const timeout = setTimeout(async () => {
+        if (!content.trim()) return;
+        
+        setPendingSaves(prev => new Set(prev).add(date));
+        
+        try {
+          const entry = entries.get(date);
+          await fetch("/api/journal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              date,
+              content: content.trim(),
+              story: entry?.story,
+              visualPrompt: entry?.visualPrompt,
+              mediaUrl: entry?.mediaUrl,
+            }),
+          });
+          
+          setLastSaved(new Date());
+        } catch (error) {
+          console.error("Background save failed:", error);
+        } finally {
+          setPendingSaves(prev => {
+            const updated = new Set(prev);
+            updated.delete(date);
+            return updated;
+          });
+        }
+        
+        timeouts.delete(date);
+      }, 10000); // Save after 10 seconds of inactivity
+      
+      timeouts.set(date, timeout);
+    };
+  }, [entries]);
+  
+  // Memoized handlers to prevent re-renders
+  const handleContentChange = useCallback((value: string) => {
+    setLocalContent(value);
+    
+    // Optimistically update the entry in memory
+    setEntries(prev => {
+      const updated = new Map(prev);
+      const existing = updated.get(dateStr);
+      if (existing) {
+        updated.set(dateStr, { ...existing, content: value, updatedAt: new Date().toISOString() });
+      } else {
+        updated.set(dateStr, {
+          date: dateStr,
+          content: value,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      return updated;
+    });
+
+    // Debounced background save (non-blocking)
+    debouncedSave(dateStr, value);
+  }, [dateStr, debouncedSave]);
+
+  // Load journal entry for current date (only when date changes)
+  const loadJournalEntry = useCallback(async (date: string) => {
+    // Don't reload if we already have this entry
+    if (entries.has(date)) {
+      const entry = entries.get(date);
+      setLocalContent(entry?.content || "");
+      setShowStory(false);
+      return;
+    }
+
+    // Background loading - don't block the UI
     try {
-      const response = await fetch(`/api/journal?date=${dateStr}`);
+      const response = await fetch(`/api/journal?date=${date}`);
       const data = await response.json();
 
       if (data.success && data.entry) {
-        setEntry(data.entry);
-        setContent(data.entry.content);
+        setEntries(prev => new Map(prev).set(date, data.entry));
+        // Only update localContent if we're still on the same date
+        if (format(currentDate, "yyyy-MM-dd") === date) {
+          setLocalContent(data.entry.content);
+        }
       } else {
-        setEntry(null);
-        setContent("");
+        // Only clear content if we're still on the same date
+        if (format(currentDate, "yyyy-MM-dd") === date) {
+          setLocalContent("");
+        }
+      }
+      // Only reset showStory if we're still on the same date
+      if (format(currentDate, "yyyy-MM-dd") === date) {
+        setShowStory(false);
       }
     } catch (error) {
       console.error("Failed to load journal entry:", error);
-      setEntry(null);
-      setContent("");
+      // Only clear content on error if we're still on the same date
+      if (format(currentDate, "yyyy-MM-dd") === date) {
+        setLocalContent("");
+        setShowStory(false);
+      }
     }
-  };
+  }, [entries, currentDate]);
 
+  // Load data when date changes
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const response = await fetch(`/api/journal?date=${dateStr}`);
-        const data = await response.json();
-
-        if (data.success && data.entry) {
-          setEntry(data.entry);
-          setContent(data.entry.content);
-        } else {
-          setEntry(null);
-          setContent("");
-        }
-      } catch (error) {
-        console.error("Failed to load journal entry:", error);
-        setEntry(null);
-        setContent("");
-      }
-    };
-
-    loadData();
-  }, [dateStr]);
-
-  const saveJournalEntry = async (includeVisualPrompt?: VisualPrompt) => {
-    if (!content.trim()) return;
-
-    setIsSaving(true);
-    try {
-      const response = await fetch("/api/journal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: dateStr,
-          content: content.trim(),
-          visualPrompt: includeVisualPrompt || entry?.visualPrompt,
-          mediaUrl: entry?.mediaUrl,
-        }),
-      });
-
-      if (response.ok) {
-        setLastSaved(new Date());
-        await loadJournalEntry(); // Reload to get updated timestamps
-      }
-    } catch (error) {
-      console.error("Failed to save journal entry:", error);
-    } finally {
-      setIsSaving(false);
+    const newDateStr = format(currentDate, "yyyy-MM-dd");
+    
+    // Immediately update UI with cached content or empty content
+    const cachedEntry = entries.get(newDateStr);
+    if (cachedEntry) {
+      // Use cached content immediately
+      setLocalContent(cachedEntry.content);
+      setShowStory(false);
+    } else {
+      // Clear content immediately for new date, load in background
+      setLocalContent("");
+      setShowStory(false);
+      // Load new content in background without blocking UI
+      loadJournalEntry(newDateStr);
     }
-  };
+  }, [currentDate, entries, loadJournalEntry]);
 
   const generateMedia = async () => {
-    if (!content.trim()) {
+    if (!localContent.trim()) {
       alert("Please write something in your journal first!");
       return;
     }
@@ -115,7 +227,7 @@ export default function JournalBook() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          journalEntry: content.trim(),
+          journalEntry: localContent.trim(),
           date: dateStr,
         }),
       });
@@ -123,30 +235,43 @@ export default function JournalBook() {
       const data = await response.json();
 
       if (data.success && data.visualPrompt) {
-        // Save the journal entry with both visual prompt and media URL if available
-        const updatedEntry = {
-          date: dateStr,
-          content: content.trim(),
-          visualPrompt: data.visualPrompt,
-          mediaUrl: data.mediaUrl || entry?.mediaUrl,
-        };
+        // Optimistically update the entry in memory
+        setEntries(prev => {
+          const updated = new Map(prev);
+          const existing = updated.get(dateStr) || {
+            date: dateStr,
+            content: localContent.trim(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          updated.set(dateStr, {
+            ...existing,
+            content: localContent.trim(),
+            visualPrompt: data.visualPrompt,
+            mediaUrl: data.mediaUrl || existing.mediaUrl,
+            updatedAt: new Date().toISOString()
+          });
+          return updated;
+        });
 
-        // Save to backend
+        // Save to backend in background
         const saveResponse = await fetch("/api/journal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedEntry),
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent.trim(),
+            story: currentEntry?.story,
+            visualPrompt: data.visualPrompt,
+            mediaUrl: data.mediaUrl || currentEntry?.mediaUrl,
+          }),
         });
 
         if (saveResponse.ok) {
           setLastSaved(new Date());
-          // Reload the entry to get the updated data
-          const reloadResponse = await fetch(`/api/journal?date=${dateStr}`);
-          const reloadData = await reloadResponse.json();
-
-          if (reloadData.success && reloadData.entry) {
-            setEntry(reloadData.entry);
-          }
+        } else {
+          console.error("Failed to save media generation:", await saveResponse.text());
         }
       } else {
         alert(data.error || "Failed to generate media");
@@ -159,60 +284,91 @@ export default function JournalBook() {
     }
   };
 
-  const navigateDate = (direction: "prev" | "next") => {
+  const navigateDate = useCallback((direction: "prev" | "next") => {
+    // Save current content before navigating if there are unsaved changes
+    if (localContent.trim() && localContent !== (currentEntry?.content || "")) {
+      // Background save - don't block navigation
+      fetch("/api/journal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: dateStr,
+          content: localContent.trim(),
+          story: currentEntry?.story,
+          visualPrompt: currentEntry?.visualPrompt,
+          mediaUrl: currentEntry?.mediaUrl,
+        }),
+      }).catch(error => {
+        console.error("Failed to save before navigation:", error);
+      });
+    }
+
+    // Navigate immediately - completely instant, no await/async
     if (direction === "prev") {
       setCurrentDate(subDays(currentDate, 1));
     } else {
       setCurrentDate(addDays(currentDate, 1));
     }
-  };
+  }, [localContent, currentEntry, dateStr, currentDate]);
 
   // Handle story generated from GenerateStory component
-  const handleStoryGenerated = (story: string) => {
-    // Append the generated story to existing content, or set it as new content
-    if (content.trim()) {
-      setContent(content + "\n\n" + story);
-    } else {
-      setContent(story);
+  const handleStoryGenerated = useCallback(async (story: string) => {
+    // Optimistically update the entry in memory
+    setEntries(prev => {
+      const updated = new Map(prev);
+      const existing = updated.get(dateStr) || {
+        date: dateStr,
+        content: localContent,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      updated.set(dateStr, {
+        ...existing,
+        story,
+        updatedAt: new Date().toISOString()
+      });
+      return updated;
+    });
+
+    // Switch to story view immediately
+    setShowStory(true);
+
+    // Save to backend in background
+    try {
+      await fetch("/api/journal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: dateStr,
+          content: localContent,
+          story: story,
+          visualPrompt: currentEntry?.visualPrompt,
+          mediaUrl: currentEntry?.mediaUrl,
+        }),
+      });
+      setLastSaved(new Date());
+    } catch (error) {
+      console.error("Failed to save story:", error);
     }
-  };
+  }, [dateStr, localContent, currentEntry]);
 
-  // Auto-save functionality
-  useEffect(() => {
-    if (!content.trim()) return;
+  // Remove the auto-save useEffect entirely as it's handled by debounced save
 
-    const saveContent = async () => {
-      if (isSaving) return;
-
-      setIsSaving(true);
-      try {
-        const response = await fetch("/api/journal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: dateStr,
-            content: content.trim(),
-            visualPrompt: entry?.visualPrompt,
-            mediaUrl: entry?.mediaUrl,
-          }),
-        });
-
-        if (response.ok) {
-          setLastSaved(new Date());
-        }
-      } catch (error) {
-        console.error("Failed to save journal entry:", error);
-      } finally {
-        setIsSaving(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      saveContent();
-    }, 2000); // Auto-save after 2 seconds of no typing
-
-    return () => clearTimeout(timer);
-  }, [content, dateStr, entry?.visualPrompt, entry?.mediaUrl, isSaving]);
+  // Get display content based on current mode
+  const displayContent = showStory ? (currentEntry?.story || '') : localContent;
+  const isStoryMode = showStory;
+  
+  // Status indicators
+  const isSaving = pendingSaves.has(dateStr);
+  const characterCount = displayContent.length;
+  const statusText = isStoryMode ? '(story)' : '(journal)';
+  
+  const saveStatusText = isSaving
+    ? "Saving..."
+    : lastSaved
+      ? `Last saved at ${format(lastSaved, "h:mm a")}`
+      : "Unsaved changes";
 
   return (
     <div className="min-h-screen bg-[var(--c-tan)] p-8 flex items-center justify-center overflow-hidden">
@@ -220,7 +376,7 @@ export default function JournalBook() {
       <GenerateStory
         currentDate={currentDate}
         onStoryGenerated={handleStoryGenerated}
-        currentJournalContent={content}
+        currentJournalContent={localContent}
       />
 
       {/* Ambient environment light */}
@@ -276,38 +432,48 @@ export default function JournalBook() {
               <div className="flex-1 flex gap-12 relative max-h-[calc(90vh-200px)] overflow-hidden">
                 {/* Left Column: Text Area */}
                 <div className="flex-1 flex flex-col min-w-0 scrollbar-thin">
+                  {/* Toggle Button Row */}
+                  <div className="flex gap-2 mb-4 justify-center ml-4 sm:ml-0">
+                    <button
+                      onClick={() => setShowStory(true)}
+                      disabled={!currentEntry?.story}
+                      className={`px-4 py-2 text-sm font-serif rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                        showStory 
+                          ? 'bg-[var(--c-gold)]/20 text-[var(--c-ink)] border-2 border-[var(--c-gold)]' 
+                          : 'text-[var(--c-ink-light)] hover:bg-[var(--c-gold)]/10'
+                      }`}
+                    >
+                      Story {!currentEntry?.story && '(Generate first)'}
+                    </button>
+                    <button
+                      onClick={() => setShowStory(false)}
+                      className={`px-4 py-2 text-sm font-serif rounded-lg transition-all ${
+                        !showStory 
+                          ? 'bg-[var(--c-gold)]/20 text-[var(--c-ink)] border-2 border-[var(--c-gold)]' 
+                          : 'text-[var(--c-ink-light)] hover:bg-[var(--c-gold)]/10'
+                      }`}
+                    >
+                      Journal
+                    </button>
+                  </div>
+
                   <div className="flex-1 overflow-hidden">
-                    <textarea
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder="What is on your mind today?"
-                      className="w-full h-full bg-transparent border-none outline-none resize-none 
-                        font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
-                        selection:bg-[var(--c-gold)]/20 pl-8 pr-4 py-2"
-                      style={{
-                        backgroundImage: `repeating-linear-gradient(
-                          transparent,
-                          transparent 1.95rem,
-                          rgba(212, 175, 55, 0.2) 1.95rem,
-                          rgba(212, 175, 55, 0.2) 2rem
-                        )`,
-                        backgroundAttachment: "local",
-                        backgroundPositionX: "2rem", // Offset the lines to account for left padding
-                      }}
+                    <OptimizedTextarea
+                      value={displayContent}
+                      onChange={handleContentChange}
+                      readOnly={isStoryMode}
+                      placeholder={isStoryMode ? "Generate a story first using the ✨ button" : "What is on your mind today?"}
+                      showStory={showStory}
                     />
                   </div>
 
                   {/* Status Bar inside the text column */}
                   <div className="mt-4 flex items-center justify-between text-xs font-serif text-[var(--c-ink-light)] italic opacity-60">
                     <span>
-                      {isSaving
-                        ? "Saving..."
-                        : lastSaved
-                          ? `Last saved at ${format(lastSaved, "h:mm a")}`
-                          : "Unsaved changes"}
+                      {saveStatusText}
                     </span>
                     <span className="pl-4 font-mono opacity-60">
-                      {content.length} chars
+                      {characterCount} chars {statusText}
                     </span>
                   </div>
                 </div>
@@ -315,12 +481,12 @@ export default function JournalBook() {
                 {/* Right Column: Visual Component & Controls */}
                 <div className="w-80 flex flex-col gap-8 shrink-0 relative z-20">
                   {/* Visual Prompt Card */}
-                  {entry?.visualPrompt ? (
+                  {currentEntry?.visualPrompt ? (
                     <div className="w-80 h-200 bg-white p-3 shadow-lg transform rotate-1 hover:rotate-0 transition-all duration-500 border border-[var(--c-tan)] lift-on-hover flex flex-col overflow-hidden">
-                      {entry.mediaUrl && (
+                      {currentEntry.mediaUrl && (
                         <div className="relative aspect-video mb-3 overflow-hidden bg-[var(--c-tan)] flex-shrink-0">
                           <Image
-                            src={entry.mediaUrl}
+                            src={currentEntry.mediaUrl}
                             alt="Cinematic scene"
                             fill
                             className="object-cover"
@@ -331,19 +497,19 @@ export default function JournalBook() {
                       <div className="flex-1 flex flex-col min-h-0">
                         <div className="flex-1 overflow-y-auto scrollbar-thin pr-2 mb-3">
                           <p className="pl-1 font-serif text-sm text-[var(--c-ink)] leading-relaxed text-center">
-                            {entry.visualPrompt.visualPrompt.replace(/[.!?]+$/, '')}
+                            {currentEntry.visualPrompt.visualPrompt.replace(/[.!?]+$/, '')}
                           </p>
                         </div>
                         <div className="flex justify-center pt-3 border-t border-[var(--c-tan)] flex-shrink-0">
                           <span className="text-[10px] uppercase tracking-wider text-[var(--c-gold)] font-bold">
-                            {entry.visualPrompt.mood}
+                            {currentEntry.visualPrompt.mood}
                           </span>
                         </div>
                       </div>
                     </div>
                   ) : (
                     /* Placeholder area if no image yet, to maintain balance or show empty state */
-                    <div className="w-full h-48 border-2 border-dashed border-[var(--c-gold)]/20 rounded-sm flex items-center justify-center">
+                    <div className="w-80 h-200 bg-white/30 p-3 shadow-lg transform rotate-1 hover:rotate-0 transition-all duration-500 border border-dashed border-[var(--c-gold)]/20 rounded-sm flex items-center justify-center">
                       <span className="text-[var(--c-gold)]/40 font-serif italic text-2xl">
                         ?
                       </span>
@@ -353,7 +519,7 @@ export default function JournalBook() {
                   {/* Generation Button */}
                   <button
                     onClick={generateMedia}
-                    disabled={isGeneratingMedia || !content.trim()}
+                    disabled={isGeneratingMedia || !localContent.trim()}
                     className="
                       w-full group relative px-6 py-4 bg-[var(--c-ink)] text-[var(--c-cream)] 
                       font-serif text-sm tracking-widest uppercase text-center

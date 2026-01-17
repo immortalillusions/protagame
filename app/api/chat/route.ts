@@ -1,20 +1,24 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { NextRequest, NextResponse } from 'next/server';
-// THIS IS JUST TO TEST OPENROUTER
-const openRouter = new OpenRouter({
+
+const openrouter = new OpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
 export async function POST(request: NextRequest) {
   try {
-    const { message } = await request.json();
+    const { message, model } = await request.json();
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const completion = await openRouter.chat.send({
-      model: 'openai/gpt-4o-mini', // Using a more reliable model
+    // Use the requested model or default to Gemini Flash
+    const selectedModel = model || 'google/gemini-3-flash-preview';
+
+    // Use non-streaming for simpler response handling
+    const completion = await openrouter.chat.send({
+      model: selectedModel,
       messages: [
         {
           role: 'user',
