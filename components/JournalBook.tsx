@@ -273,26 +273,29 @@ export default function JournalBook() {
               </div>
 
               {/* Main Content Area - 2 Column Layout */}
-              <div className="flex-1 flex gap-12 relative">
+              <div className="flex-1 flex gap-12 relative max-h-[calc(80vh-200px)] overflow-hidden">
                 {/* Left Column: Text Area */}
-                <div className="flex-1 flex flex-col min-w-0">
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="What is on your mind today?"
-                    className="w-full flex-1 bg-transparent border-none outline-none resize-none 
-                      font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
-                      selection:bg-[var(--c-gold)]/20"
-                    style={{
-                      backgroundImage: `repeating-linear-gradient(
-                        transparent,
-                        transparent 1.95rem,
-                        rgba(212, 175, 55, 0.2) 1.95rem,
-                        rgba(212, 175, 55, 0.2) 2rem
-                      )`,
-                      backgroundAttachment: "local",
-                    }}
-                  />
+                <div className="flex-1 flex flex-col min-w-0 scrollbar-thin">
+                  <div className="flex-1 overflow-hidden">
+                    <textarea
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="What is on your mind today?"
+                      className="w-full h-full bg-transparent border-none outline-none resize-none 
+                        font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
+                        selection:bg-[var(--c-gold)]/20 pl-8 pr-4 py-2"
+                      style={{
+                        backgroundImage: `repeating-linear-gradient(
+                          transparent,
+                          transparent 1.95rem,
+                          rgba(212, 175, 55, 0.2) 1.95rem,
+                          rgba(212, 175, 55, 0.2) 2rem
+                        )`,
+                        backgroundAttachment: "local",
+                        backgroundPositionX: "2rem", // Offset the lines to account for left padding
+                      }}
+                    />
+                  </div>
 
                   {/* Status Bar inside the text column */}
                   <div className="mt-4 flex items-center justify-between text-xs font-serif text-[var(--c-ink-light)] italic opacity-60">
@@ -303,7 +306,7 @@ export default function JournalBook() {
                           ? `Last saved at ${format(lastSaved, "h:mm a")}`
                           : "Unsaved changes"}
                     </span>
-                    <span className="font-mono opacity-60">
+                    <span className="pl-4 font-mono opacity-60">
                       {content.length} chars
                     </span>
                   </div>
