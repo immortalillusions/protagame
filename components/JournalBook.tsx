@@ -240,7 +240,7 @@ export default function JournalBook() {
               <div className="flex items-center justify-between mb-10 pb-6 border-b border-[var(--c-gold)]/30 relative">
                 <button
                   onClick={() => navigateDate("prev")}
-                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
+                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-all lift-on-hover active:scale-95"
                   title="Previous day"
                 >
                   <span className="font-serif text-xl">←</span>
@@ -255,7 +255,7 @@ export default function JournalBook() {
 
                 <button
                   onClick={() => navigateDate("next")}
-                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
+                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-all lift-on-hover active:scale-95"
                   title="Next day"
                   disabled={
                     format(currentDate, "yyyy-MM-dd") >=
