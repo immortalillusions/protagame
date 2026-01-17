@@ -31,7 +31,7 @@ export const VISUAL_GENERATION_PROMPT_TEMPLATE = (
   mood: string,
   colorPalette: string,
   cinematicStyle: string
-) => `Create a cinematic, symbolic image with subtle motion potential:
+) => `Create a fast, symbolic image:
 
 VISUAL: ${visualPrompt}
 MOOD: ${mood}
@@ -39,14 +39,14 @@ COLORS: ${colorPalette}
 STYLE: ${cinematicStyle}
 
 Requirements:
-- High visual quality, artistic composition
-- Symbolic/metaphorical rather than literal
-- Suitable for 2-3 second animation loop
-- No text, people, or specific locations
-- Cinematic lighting and depth
-- 16:9 aspect ratio preferred
+- Simple, clean composition for fast generation
+- Symbolic/metaphorical imagery
+- ${cinematicStyle}
+- ${colorPalette} color scheme
+- Optimized for speed and web display
+- Minimal details, maximum impact
 
-Style: Cinematic still, film photography, dramatic lighting, symbolic imagery`;
+Style: Cinematic, symbolic, fast generation, ${mood} mood`;
 
 export const generateJournalPrompt = (journalEntry: string) => `
 Transform this journal entry into a cinematic visual prompt:
