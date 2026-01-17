@@ -158,8 +158,8 @@ export default function JournalBook() {
       const data = await response.json();
 
       if (data.success && data.visualPrompt) {
-        // Optimistic update
-        const updatedEntry = {
+        // Create the updated entry with visualization
+        const updatedEntry: JournalEntry = {
           date: dateStr,
           content: content.trim(),
           visualPrompt: data.visualPrompt,
@@ -168,9 +168,10 @@ export default function JournalBook() {
           updatedAt: new Date().toISOString()
         };
 
-        setEntry(updatedEntry); // Immediate UI update
+        // Optimistic UI update
+        setEntry(updatedEntry);
 
-        // Save updated entry with visual prompt
+        // Save to MongoDB
         const saveResponse = await fetch("/api/journal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -179,6 +180,11 @@ export default function JournalBook() {
 
         if (saveResponse.ok) {
           setLastSaved(new Date());
+
+          // CRITICAL FIX: Update the cache with the new entry
+          // This ensures navigation away and back will show the visualized content
+          entryCache.current.set(dateStr, updatedEntry);
+          console.log('[DEBUG] Cache updated after Visualize:', dateStr);
         }
       } else {
         alert(data.error || "Failed to generate media");
