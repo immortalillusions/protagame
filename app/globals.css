@@ -43,18 +43,7 @@
   --font-serif: var(--font-serif);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Muted warm dark mode */
-    --background: #1a1612;
-    --foreground: #e6e2d6;
-    --c-cream: #241f19;
-    --c-tan: #1a1612;
-    --c-ink: #e6e2d6;
-    --c-ink-light: #aaa59a;
-    --c-shadow-warm: 30deg 50% 5%;
-  }
-}
+/* Dark mode override removed to maintain consistent warm paper aesthetic */
 
 body {
   background: var(--background);
