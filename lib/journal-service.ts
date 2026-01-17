@@ -23,7 +23,8 @@ class JournalService {
   private static readonly COLLECTION_NAME = 'journal_entries';
 
   private static async getCollection() {
-    await client.connect();
+    // The client will automatically connect when needed
+    // No need to explicitly call connect() each time
     return client.db('protagame').collection<JournalEntry>(this.COLLECTION_NAME);
   }
 
