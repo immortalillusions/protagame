@@ -1,4 +1,4 @@
-# ProtaGame - Example AI Pipeline
+# ProtagaMe - Example AI Pipeline
 
 ## Sample Journal Entry
 ```

@@ -1,4 +1,4 @@
-# ProtaGame - Your Story, Cinematically Told
+# ProtagaMe - Your Story, Cinematically Told
 
 An online diary where everyone is the protagonist of their own story. Each journal entry can be transformed into a cinematic visual prompt using AI.
 
