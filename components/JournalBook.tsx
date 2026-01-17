@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { format, addDays, subDays } from 'date-fns';
-import Image from 'next/image';
+import { useState, useEffect } from "react";
+import { format, addDays, subDays } from "date-fns";
+import Image from "next/image";
+import GenerateStory from "../app/components/summary/generateStory";
 
 interface VisualPrompt {
   visualPrompt: string;
@@ -24,13 +25,13 @@ interface JournalEntry {
 export default function JournalBook() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [entry, setEntry] = useState<JournalEntry | null>(null);
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
   const [isGeneratingMedia, setIsGeneratingMedia] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  const dateStr = format(currentDate, 'yyyy-MM-dd');
-  const displayDate = format(currentDate, 'MMMM d, yyyy');
+  const dateStr = format(currentDate, "yyyy-MM-dd");
+  const displayDate = format(currentDate, "MMMM d, yyyy");
 
   // Load journal entry for current date
   const loadJournalEntry = async () => {
@@ -43,12 +44,12 @@ export default function JournalBook() {
         setContent(data.entry.content);
       } else {
         setEntry(null);
-        setContent('');
+        setContent("");
       }
     } catch (error) {
-      console.error('Failed to load journal entry:', error);
+      console.error("Failed to load journal entry:", error);
       setEntry(null);
-      setContent('');
+      setContent("");
     }
   };
 
@@ -63,12 +64,12 @@ export default function JournalBook() {
           setContent(data.entry.content);
         } else {
           setEntry(null);
-          setContent('');
+          setContent("");
         }
       } catch (error) {
-        console.error('Failed to load journal entry:', error);
+        console.error("Failed to load journal entry:", error);
         setEntry(null);
-        setContent('');
+        setContent("");
       }
     };
 
@@ -80,15 +81,15 @@ export default function JournalBook() {
 
     setIsSaving(true);
     try {
-      const response = await fetch('/api/journal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/journal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date: dateStr,
           content: content.trim(),
           visualPrompt: includeVisualPrompt || entry?.visualPrompt,
-          mediaUrl: entry?.mediaUrl
-        })
+          mediaUrl: entry?.mediaUrl,
+        }),
       });
 
       if (response.ok) {
@@ -96,7 +97,7 @@ export default function JournalBook() {
         await loadJournalEntry(); // Reload to get updated timestamps
       }
     } catch (error) {
-      console.error('Failed to save journal entry:', error);
+      console.error("Failed to save journal entry:", error);
     } finally {
       setIsSaving(false);
     }
@@ -104,19 +105,19 @@ export default function JournalBook() {
 
   const generateMedia = async () => {
     if (!content.trim()) {
-      alert('Please write something in your journal first!');
+      alert("Please write something in your journal first!");
       return;
     }
 
     setIsGeneratingMedia(true);
     try {
-      const response = await fetch('/api/generate-media', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/generate-media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           journalEntry: content.trim(),
-          date: dateStr
-        })
+          date: dateStr,
+        }),
       });
 
       const data = await response.json();
@@ -127,14 +128,14 @@ export default function JournalBook() {
           date: dateStr,
           content: content.trim(),
           visualPrompt: data.visualPrompt,
-          mediaUrl: data.mediaUrl || entry?.mediaUrl
+          mediaUrl: data.mediaUrl || entry?.mediaUrl,
         };
 
         // Save to backend
-        const saveResponse = await fetch('/api/journal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedEntry)
+        const saveResponse = await fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedEntry),
         });
 
         if (saveResponse.ok) {
@@ -148,21 +149,31 @@ export default function JournalBook() {
           }
         }
       } else {
-        alert(data.error || 'Failed to generate media');
+        alert(data.error || "Failed to generate media");
       }
     } catch (error) {
-      console.error('Media generation failed:', error);
-      alert('Failed to generate media');
+      console.error("Media generation failed:", error);
+      alert("Failed to generate media");
     } finally {
       setIsGeneratingMedia(false);
     }
   };
 
-  const navigateDate = (direction: 'prev' | 'next') => {
-    if (direction === 'prev') {
+  const navigateDate = (direction: "prev" | "next") => {
+    if (direction === "prev") {
       setCurrentDate(subDays(currentDate, 1));
     } else {
       setCurrentDate(addDays(currentDate, 1));
+    }
+  };
+
+  // Handle story generated from GenerateStory component
+  const handleStoryGenerated = (story: string) => {
+    // Append the generated story to existing content, or set it as new content
+    if (content.trim()) {
+      setContent(content + "\n\n" + story);
+    } else {
+      setContent(story);
     }
   };
 
@@ -175,22 +186,22 @@ export default function JournalBook() {
 
       setIsSaving(true);
       try {
-        const response = await fetch('/api/journal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             date: dateStr,
             content: content.trim(),
             visualPrompt: entry?.visualPrompt,
-            mediaUrl: entry?.mediaUrl
-          })
+            mediaUrl: entry?.mediaUrl,
+          }),
         });
 
         if (response.ok) {
           setLastSaved(new Date());
         }
       } catch (error) {
-        console.error('Failed to save journal entry:', error);
+        console.error("Failed to save journal entry:", error);
       } finally {
         setIsSaving(false);
       }
@@ -205,14 +216,19 @@ export default function JournalBook() {
 
   return (
     <div className="min-h-screen bg-[var(--c-tan)] p-8 flex items-center justify-center overflow-hidden">
+      {/* Generate Story Button - Floating */}
+      <GenerateStory
+        currentDate={currentDate}
+        onStoryGenerated={handleStoryGenerated}
+        currentJournalContent={content}
+      />
+
       {/* Ambient environment light */}
       <div className="fixed inset-0 pointer-events-none bg-gradient-radial from-[var(--c-cream)]/20 to-[var(--c-ink)]/5" />
 
       <div className="max-w-6xl w-full mx-auto relative perspective-container z-10">
-
         {/* Book Container - The Physical Object */}
         <div className="relative layer-3d group">
-
           {/* 1. Base Shadow (The desk contact) */}
           <div className="absolute top-4 left-4 right-[-10px] bottom-[-10px] bg-[var(--c-shadow-warm)]/20 blur-xl rounded-lg transform translate-z-[-20px]" />
 
@@ -221,17 +237,15 @@ export default function JournalBook() {
 
           {/* 3. The Paper Block (Main writing surface) */}
           <div className="relative bg-[var(--c-cream)] rounded-r-lg min-h-[80vh] shadow-[inset_10px_0_20px_rgba(0,0,0,0.05)] border-r-4 border-[#e6e2d6] paper-texture flex overflow-hidden">
-
             {/* Spine/Gutter Shadow */}
             <div className="absolute left-0 top-0 bottom-0 w-16 bg-[image:var(--spine-gradient)] pointer-events-none z-20 mix-blend-multiply" />
 
             {/* Content Container */}
             <div className="flex-1 pl-16 pr-12 py-12 flex flex-col relative z-10">
-
               {/* Header: Date Navigation */}
               <div className="flex items-center justify-between mb-10 pb-6 border-b border-[var(--c-gold)]/30">
                 <button
-                  onClick={() => navigateDate('prev')}
+                  onClick={() => navigateDate("prev")}
                   className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
                   title="Previous day"
                 >
@@ -246,10 +260,13 @@ export default function JournalBook() {
                 </div>
 
                 <button
-                  onClick={() => navigateDate('next')}
+                  onClick={() => navigateDate("next")}
                   className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
                   title="Next day"
-                  disabled={format(currentDate, 'yyyy-MM-dd') >= format(new Date(), 'yyyy-MM-dd')}
+                  disabled={
+                    format(currentDate, "yyyy-MM-dd") >=
+                    format(new Date(), "yyyy-MM-dd")
+                  }
                 >
                   <span className="font-serif text-xl">→</span>
                 </button>
@@ -257,7 +274,6 @@ export default function JournalBook() {
 
               {/* Main Content Area - 2 Column Layout */}
               <div className="flex-1 flex gap-12 relative">
-
                 {/* Left Column: Text Area */}
                 <div className="flex-1 flex flex-col min-w-0">
                   <textarea
@@ -274,20 +290,27 @@ export default function JournalBook() {
                         rgba(212, 175, 55, 0.2) 1.95rem,
                         rgba(212, 175, 55, 0.2) 2rem
                       )`,
-                      backgroundAttachment: 'local'
+                      backgroundAttachment: "local",
                     }}
                   />
 
                   {/* Status Bar inside the text column */}
                   <div className="mt-4 flex items-center justify-between text-xs font-serif text-[var(--c-ink-light)] italic opacity-60">
-                    <span>{isSaving ? 'Saving...' : lastSaved ? `Last saved at ${format(lastSaved, 'h:mm a')}` : 'Unsaved changes'}</span>
-                    <span className="font-mono opacity-60">{content.length} chars</span>
+                    <span>
+                      {isSaving
+                        ? "Saving..."
+                        : lastSaved
+                          ? `Last saved at ${format(lastSaved, "h:mm a")}`
+                          : "Unsaved changes"}
+                    </span>
+                    <span className="font-mono opacity-60">
+                      {content.length} chars
+                    </span>
                   </div>
                 </div>
 
                 {/* Right Column: Visual Component & Controls */}
                 <div className="w-80 flex flex-col gap-8 shrink-0 relative z-20">
-
                   {/* Visual Prompt Card */}
                   {entry?.visualPrompt ? (
                     <div className="w-full bg-white p-3 shadow-lg transform rotate-1 hover:rotate-0 transition-all duration-500 border border-[var(--c-tan)] lift-on-hover">
@@ -316,7 +339,9 @@ export default function JournalBook() {
                   ) : (
                     /* Placeholder area if no image yet, to maintain balance or show empty state */
                     <div className="w-full aspect-[4/5] border-2 border-dashed border-[var(--c-gold)]/20 rounded-sm flex items-center justify-center">
-                      <span className="text-[var(--c-gold)]/40 font-serif italic text-2xl">?</span>
+                      <span className="text-[var(--c-gold)]/40 font-serif italic text-2xl">
+                        ?
+                      </span>
                     </div>
                   )}
 
@@ -333,21 +358,18 @@ export default function JournalBook() {
                     "
                   >
                     <span className="relative z-10 flex items-center justify-center gap-2">
-                      {isGeneratingMedia ? 'Dreaming...' : 'Visualize'}
+                      {isGeneratingMedia ? "Dreaming..." : "Visualize"}
                       <span className="text-[var(--c-gold)]">✦</span>
                     </span>
                     <div className="absolute inset-0 bg-[var(--c-gold)]/10 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                   </button>
-
                 </div>
               </div>
-
             </div>
 
             {/* Page thickness effect on the right edge */}
             <div className="absolute right-0 top-0 bottom-0 w-[4px] bg-gradient-to-l from-[#dcd8c8] to-transparent pointer-events-none" />
           </div>
-
         </div>
       </div>
     </div>
