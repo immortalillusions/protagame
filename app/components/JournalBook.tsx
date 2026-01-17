@@ -1,5 +1,7 @@
 "use client";
 
+import { format } from "date-fns"; // <--- Added this import
+import { useJournal } from "@/app/hooks/useJournal"; // <--- Added this import
 import DateNavigation from "./journal/DateNavigation";
 import MediaSection from "./journal/MediaSection";
 import JournalEditor from "./journal/JournalEditor";
