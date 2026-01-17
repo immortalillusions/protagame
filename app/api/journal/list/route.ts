@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import JournalService from '@/lib/journal-service';
+import JsonJournalService from '@/lib/json-journal-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,13 +12,13 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       // Search entries by content
-      entries = await JournalService.searchEntries(search);
+      entries = await JsonJournalService.searchEntries(search);
     } else if (startDate && endDate) {
       // Get entries in date range
-      entries = await JournalService.getEntriesInRange(startDate, endDate);
+      entries = await JsonJournalService.getEntriesInRange(startDate, endDate);
     } else {
       // Get all entries
-      entries = await JournalService.getAllEntries();
+      entries = await JsonJournalService.getAllEntries();
     }
 
     return NextResponse.json({
@@ -49,7 +49,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const deleted = await JournalService.deleteEntry(date);
+    const deleted = await JsonJournalService.deleteEntry(date);
 
     if (deleted) {
       return NextResponse.json({

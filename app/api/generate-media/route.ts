@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AIMediaPipeline, MediaGenerationResult } from '@/lib/ai-pipeline';
-import JournalService from '@/lib/journal-service';
+import JsonJournalService from '@/lib/json-journal-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,15 +49,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save/update the journal entry in MongoDB with generated media
+    // Save/update the journal entry with generated media
     if (date && result.visualPrompt) {
       try {
-        console.log(`Attempting to save generated media to MongoDB for date: ${date}`);
+        console.log(`Attempting to save generated media for date: ${date}`);
         console.log('Generated visual prompt:', JSON.stringify(result.visualPrompt, null, 2));
         console.log('Generated media URL:', result.mediaUrl || 'null/undefined');
         
         // First, ensure the journal entry exists by saving it with the content
-        const savedEntry = await JournalService.saveEntry({
+        const savedEntry = await JsonJournalService.saveEntry({
           date,
           content: journalEntry.trim(),
           visualPrompt: result.visualPrompt,
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         // Don't fail the request, just log the error
       }
     } else {
-      console.log('⚠️ Skipping MongoDB save - missing date or visualPrompt:', {
+      console.log('⚠️ Skipping save - missing date or visualPrompt:', {
         date,
         hasVisualPrompt: !!result.visualPrompt
       });
