@@ -1,19 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { format } from "date-fns";
+// Import the custom hook
+import { useGoogleStory } from "../../hooks/useGoogleStory";
 
 interface GenerateStoryProps {
   currentDate: Date;
   onStoryGenerated: (story: string) => void;
+  currentJournalContent?: string;
 }
 
 export default function GenerateStory({
   currentDate,
   onStoryGenerated,
+  currentJournalContent = "",
 }: GenerateStoryProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Use the hook
+  const { generateStory, isGenerating } = useGoogleStory();
 
   // Form State
   const [selectedRange, setSelectedRange] = useState("current");
@@ -27,37 +32,22 @@ export default function GenerateStory({
     return "Balanced";
   };
 
-  const handleGenerate = async () => {
-    setIsGenerating(true);
-
-    // Construct the prompt
+  const handleGenerateClick = async () => {
     const style = getStyleLabel(styleValue);
-    const dateStr = format(currentDate, "MMMM d, yyyy");
 
-    const prompt = `Write a short, creative journal entry for ${dateStr}. 
-    Genre: ${genre}. 
-    Mood: ${mood}. 
-    Style: ${style}. 
-    Focus: ${selectedRange === "current" ? "Events of this specific day" : "A summary of recent events"}.
-    Keep it under 150 words and make it engaging.`;
+    // Call the hook function
+    const story = await generateStory({
+      date: currentDate,
+      genre,
+      mood,
+      style,
+      range: selectedRange,
+      currentContent: currentJournalContent,
+    });
 
-    try {
-      const response = await fetch("/hooks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt }),
-      });
-
-      const data = await response.json();
-
-      if (data.response) {
-        onStoryGenerated(data.response);
-        setIsOpen(false);
-      }
-    } catch (error) {
-      console.error("Failed to generate story:", error);
-    } finally {
-      setIsGenerating(false);
+    if (story) {
+      onStoryGenerated(story);
+      setIsOpen(false);
     }
   };
 
@@ -176,7 +166,7 @@ export default function GenerateStory({
               </button>
               <button
                 className="px-6 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 hover:shadow-lg transition-all min-w-[120px] flex justify-center items-center"
-                onClick={handleGenerate}
+                onClick={handleGenerateClick}
                 disabled={isGenerating}
               >
                 {isGenerating ? "Generating..." : "✨ Generate"}
