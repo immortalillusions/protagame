@@ -7,6 +7,7 @@ interface GenerateStoryParams {
   mood: string;
   style: string;
   range: string;
+  length: string; // Added length parameter
   currentContent?: string;
 }
 
@@ -20,6 +21,7 @@ export function useGoogleStory() {
     mood,
     style,
     range,
+    length, // Destructure length
     currentContent = "",
   }: GenerateStoryParams): Promise<string | null> => {
     setIsGenerating(true);
@@ -27,13 +29,30 @@ export function useGoogleStory() {
 
     const dateStr = format(date, "MMMM d, yyyy");
 
-    // Construct the prompt for Gemini
-    let prompt = `Write a short, creative journal entry for ${dateStr}. 
+    // Map length to word count
+    const wordCountMap: Record<string, number> = {
+      short: 100,
+      medium: 250,
+      long: 500,
+    };
+    const targetWords = wordCountMap[length] || 250;
+
+    // Construct the prompt for Gemini with dynamic length
+    let prompt = `Write a creative journal entry for ${dateStr}. 
     Genre: ${genre}. 
     Mood: ${mood}. 
     Style: ${style}. 
     Focus: ${range === "current" ? "Events of this specific day" : "A summary of recent events"}.
-    Keep it under 150 words and make it engaging.`;
+    
+    IMPORTANT: The story MUST be approximately ${targetWords} words long. ${
+      length === "long"
+        ? "This should be a detailed, immersive story with rich descriptions and developed narrative."
+        : length === "short"
+          ? "Keep it concise but impactful."
+          : "Balance detail with brevity."
+    }
+    
+    Make it engaging and creative.`;
 
     if (currentContent && currentContent.trim().length > 0) {
       prompt += `\n\nContext from user's current writing: "${currentContent}"`;
@@ -45,7 +64,7 @@ export function useGoogleStory() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: prompt,
-          model: "google/gemini-flash-1.5", // Explicitly requesting Gemini
+          model: "google/gemini-flash-1.5",
         }),
       });
 
