@@ -4,12 +4,41 @@ import { useState, useRef, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Html } from "@react-three/drei";
 import * as THREE from "three";
+import { format } from "date-fns";
+import GenerateStory from "./generateStory/generateStory";
+// --- Mock Hook ---
+function useJournal() {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [content, setContent] = useState("");
+  const [entries, setEntries] = useState<Record<string, string>>({});
+
+  const dateStr = format(currentDate, "yyyy-MM-dd");
+
+  useEffect(() => {
+    setContent(entries[dateStr] || "");
+  }, [dateStr, entries]);
+
+  return {
+    currentDate,
+    displayDate: format(currentDate, "MMMM d, yyyy"),
+    content,
+    setContent: (newContent: string) => {
+      setContent(newContent);
+      setEntries((prev) => ({ ...prev, [dateStr]: newContent }));
+    },
+    navigateDate: (dir: "prev" | "next") => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() + (dir === "next" ? 1 : -1));
+      setCurrentDate(newDate);
+    },
+  };
+}
 
 const BOOK_COLOR = "#e8d5b7";
 const PAGE_COLOR = "#faf6f0";
 const SPINE_COLOR = "#d4c4a8";
 
-// Get days in month
+// --- Helper Functions ---
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -37,7 +66,9 @@ function getDayOfWeek(year: number, month: number, day: number) {
   return date.toLocaleDateString("en-US", { weekday: "long" });
 }
 
-// Camera animation
+// --- Internal Components ---
+
+// Camera Animation
 function CameraController({
   isOpen,
   bookIsOpen,
@@ -59,11 +90,10 @@ function CameraController({
     camera.position.lerp(targetPos.current, delta * 3);
     camera.lookAt(0, 0, 0);
   });
-
   return null;
 }
 
-// Single page component
+// Page Component
 function Page({
   content,
   date,
@@ -87,7 +117,6 @@ function Page({
 }) {
   const [hovered, setHovered] = useState(false);
   const [editText, setEditText] = useState(content);
-  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     setEditText(content);
@@ -105,33 +134,8 @@ function Page({
     }
   };
 
-  const handleGenerateStory = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsGenerating(true);
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `Write a short, creative journal entry for ${date}. Keep it under 100 words.`,
-        }),
-      });
-      const data = await response.json();
-      if (data.response) {
-        setEditText((prev) =>
-          prev ? prev + "\n\n" + data.response : data.response,
-        );
-      }
-    } catch (error) {
-      console.error("Failed to generate story:", error);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
     <group
-      // Increased Z height to 0.03 to avoid z-fighting with cover/stacks
       position={[xPos, 0, 0.03]}
       onClick={(e) => {
         e.stopPropagation();
@@ -140,7 +144,6 @@ function Page({
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
     >
-      {/* Page */}
       <mesh>
         <boxGeometry args={[1.45, 1.95, 0.01]} />
         <meshStandardMaterial
@@ -149,7 +152,6 @@ function Page({
         />
       </mesh>
 
-      {/* Date header */}
       <Text
         position={[0, 0.82, 0.01]}
         fontSize={0.1}
@@ -158,8 +160,6 @@ function Page({
       >
         {date}
       </Text>
-
-      {/* Day of week */}
       <Text
         position={[0, 0.68, 0.01]}
         fontSize={0.05}
@@ -169,7 +169,6 @@ function Page({
         {dayOfWeek}
       </Text>
 
-      {/* Divider - only if not empty page */}
       {!isEmpty && (
         <mesh position={[0, 0.58, 0.01]}>
           <planeGeometry args={[1.2, 0.003]} />
@@ -177,7 +176,6 @@ function Page({
         </mesh>
       )}
 
-      {/* Lines */}
       {[...Array(9)].map((_, i) => (
         <mesh key={i} position={[0, 0.45 - i * 0.12, 0.01]}>
           <planeGeometry args={[1.3, 0.002]} />
@@ -185,127 +183,57 @@ function Page({
         </mesh>
       ))}
 
-      {/* Editor */}
       {isEditing && (
-        <>
-          {/* Main Editor Text Area - Centered on Page */}
-          <Html
-            position={[0, -0.05, 0.02]}
-            transform
-            distanceFactor={1.5}
-            center
-            style={{ width: "290px", height: "390px" }}
+        <Html
+          position={[0, -0.05, 0.02]}
+          transform
+          distanceFactor={1.5}
+          center
+          style={{ width: "290px", height: "390px" }}
+        >
+          <div
+            style={{ width: "100%", height: "100%", pointerEvents: "auto" }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Write about your day..."
+              autoFocus
               style={{
                 width: "100%",
                 height: "100%",
-                pointerEvents: "auto",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
+                padding: "20px",
+                marginTop: "20px",
+                backgroundColor: "rgba(254, 252, 247, 0.98)",
+                border: "1px solid #d4c4a8",
+                borderRadius: "2px",
+                color: "#444",
+                fontSize: "14px",
+                fontFamily: "Georgia, serif",
+                lineHeight: "1.6",
+                resize: "none",
+                outline: "none",
+                boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
               }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <textarea
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Write about your day..."
-                autoFocus
-                style={{
-                  flex: 1,
-                  width: "100%",
-                  padding: "20px",
-                  paddingBottom: "20px",
-                  backgroundColor: "rgba(254, 252, 247, 0.98)",
-                  border: "1px solid #d4c4a8",
-                  borderRadius: "4px",
-                  color: "#444",
-                  fontSize: "14px",
-                  fontFamily: "Georgia, serif",
-                  lineHeight: "1.6",
-                  resize: "none",
-                  outline: "none",
-                  boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-                }}
-              />
-
-              <p
-                style={{
-                  position: "absolute",
-                  bottom: "5px",
-                  left: "0",
-                  right: "0",
-                  fontSize: "10px",
-                  color: "#b8a88a",
-                  textAlign: "center",
-                  pointerEvents: "none",
-                }}
-              >
-                Enter ↵ save • Esc cancel
-              </p>
-            </div>
-          </Html>
-
-          {/* Generate Story Button - Fixed at Top Left of Screen */}
-          <Html position={[0, 0, 0]} style={{ pointerEvents: "none" }}>
-            <div
-              style={{
-                position: "fixed",
-                top: "20px",
-                left: "20px",
-                zIndex: 1000,
-                pointerEvents: "auto",
-                transform: "translate(-50vw, -50vh)", // Reset position relative to screen center if needed, but fixed usually handles it.
-                // Note: Html without transform renders into a div that might be centered.
-                // To get true top-left of screen, we often need `fullscreen` prop or specific css hacks.
-                // Let's use a portal to document.body to break out of the canvas container completely.
-              }}
-            >
-              {/* Note: In standard R3F, Html components are positioned relative to the 3D object unless `fullscreen` or `portal` is used.
-                  However, simple fixed positioning often works if we render it. 
-                  Let's try standard Html with inline styles for fixed positioning relative to viewport. 
-              */}
-            </div>
-          </Html>
-          {/* Actually, simpler approach: The Html component places content in a div on top of the canvas.
-             If we use `fullscreen`, it covers the whole screen area.
-          */}
-          <Html fullscreen style={{ pointerEvents: "none" }}>
-            <button
-              onClick={handleGenerateStory}
-              disabled={isGenerating}
+            />
+            <p
               style={{
                 position: "absolute",
-                top: "20px",
-                left: "20px",
-                padding: "10px 20px",
-                backgroundColor: isGenerating ? "#ccc" : "#8c7b6c",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                cursor: isGenerating ? "wait" : "pointer",
-                fontFamily: "sans-serif",
-                fontWeight: "bold",
-                boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-                transition: "all 0.2s",
-                pointerEvents: "auto", // Re-enable clicks
-                zIndex: 2000,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
+                bottom: "5px",
+                width: "100%",
+                textAlign: "center",
+                fontSize: "10px",
+                color: "#b8a88a",
               }}
             >
-              <span>✨</span>
-              {isGenerating ? "Generating Story..." : "Generate Story"}
-            </button>
-          </Html>
-        </>
+              Enter ↵ save • Esc cancel
+            </p>
+          </div>
+        </Html>
       )}
 
-      {/* Content */}
       {!isEditing && !isEmpty && (
         <>
           <Text
@@ -319,7 +247,6 @@ function Page({
           >
             {content}
           </Text>
-
           {hovered && !content && (
             <Text
               position={[0, 0, 0.02]}
@@ -336,7 +263,7 @@ function Page({
   );
 }
 
-// Main Book component
+// Book Component
 function Book({
   entries,
   setEntries,
@@ -347,36 +274,20 @@ function Book({
   isOpen,
   onBookOpened,
   bookIsOpen,
-}: {
-  entries: Record<number, string>;
-  setEntries: React.Dispatch<React.SetStateAction<Record<number, string>>>;
-  currentDay: number;
-  daysInMonth: number;
-  month: number;
-  year: number;
-  isOpen: boolean;
-  onBookOpened: () => void;
-  bookIsOpen: boolean;
-}) {
+}: any) {
   const coverRef = useRef<THREE.Group>(null);
   const [coverAngle, setCoverAngle] = useState(0);
   const [editingPage, setEditingPage] = useState<"left" | "right" | null>(null);
   const [bookTilt, setBookTilt] = useState(-0.1);
 
   useFrame((_, delta) => {
-    // Open cover
     if (isOpen && coverAngle < Math.PI) {
       const newAngle = Math.min(coverAngle + delta * 2, Math.PI);
       setCoverAngle(newAngle);
-      if (newAngle >= Math.PI - 0.1 && coverAngle < Math.PI - 0.1) {
+      if (newAngle >= Math.PI - 0.1 && coverAngle < Math.PI - 0.1)
         onBookOpened();
-      }
     }
-    if (coverRef.current) {
-      coverRef.current.rotation.y = -coverAngle;
-    }
-
-    // Tilt book
+    if (coverRef.current) coverRef.current.rotation.y = -coverAngle;
     const targetTilt = bookIsOpen ? -Math.PI / 2.5 : -0.1;
     setBookTilt((prev) => THREE.MathUtils.lerp(prev, targetTilt, delta * 2));
   });
@@ -387,23 +298,18 @@ function Book({
 
   return (
     <group rotation={[bookTilt, 0, 0]}>
-      {/* Back cover */}
       <mesh position={[0, 0, -0.08]}>
         <boxGeometry args={[3.1, 2.05, 0.05]} />
-        <meshStandardMaterial color={BOOK_COLOR} roughness={0.6} />
+        <meshStandardMaterial color={BOOK_COLOR} />
       </mesh>
-
-      {/* Spine */}
       <mesh position={[0, 0, -0.05]}>
         <boxGeometry args={[0.12, 2.05, 0.08]} />
-        <meshStandardMaterial color={SPINE_COLOR} roughness={0.6} />
+        <meshStandardMaterial color={SPINE_COLOR} />
       </mesh>
-
-      {/* Front cover */}
       <group ref={coverRef} position={[0.05, 0, -0.02]}>
         <mesh position={[0.75, 0, 0]}>
           <boxGeometry args={[1.5, 2.05, 0.05]} />
-          <meshStandardMaterial color={BOOK_COLOR} roughness={0.6} />
+          <meshStandardMaterial color={BOOK_COLOR} />
         </mesh>
         {coverAngle < 2 && (
           <>
@@ -435,10 +341,8 @@ function Book({
         )}
       </group>
 
-      {/* Pages */}
       {pagesVisible && (
         <>
-          {/* Left page - Day N */}
           {leftDay <= daysInMonth && (
             <Page
               content={entries[leftDay] || ""}
@@ -448,15 +352,13 @@ function Book({
               isEditing={editingPage === "left"}
               onStartEdit={() => setEditingPage("left")}
               onSave={(text) => {
-                setEntries((prev) => ({ ...prev, [leftDay]: text }));
+                setEntries((prev: any) => ({ ...prev, [leftDay]: text }));
                 setEditingPage(null);
               }}
               onCancel={() => setEditingPage(null)}
               isEmpty={false}
             />
           )}
-
-          {/* Right page - Day N+1 */}
           {rightDay <= daysInMonth ? (
             <Page
               content={entries[rightDay] || ""}
@@ -466,14 +368,13 @@ function Book({
               isEditing={editingPage === "right"}
               onStartEdit={() => setEditingPage("right")}
               onSave={(text) => {
-                setEntries((prev) => ({ ...prev, [rightDay]: text }));
+                setEntries((prev: any) => ({ ...prev, [rightDay]: text }));
                 setEditingPage(null);
               }}
               onCancel={() => setEditingPage(null)}
               isEmpty={false}
             />
           ) : (
-            // Empty right page if month ended
             <Page
               content=""
               date=""
@@ -487,21 +388,19 @@ function Book({
             />
           )}
 
-          {/* Page stacks */}
-          {/* Stack on left gets thicker as we progress */}
+          {/* Page Stacks */}
           {currentDay > 1 && (
             <mesh position={[-0.75, 0, -0.01]}>
               <boxGeometry args={[1.4, 1.9, 0.01 + 0.002 * currentDay]} />
-              <meshStandardMaterial color="#f5f0e8" roughness={0.9} />
+              <meshStandardMaterial color="#f5f0e8" />
             </mesh>
           )}
-          {/* Stack on right gets thinner as we progress */}
           {currentDay < daysInMonth && (
             <mesh position={[0.75, 0, -0.01]}>
               <boxGeometry
                 args={[1.4, 1.9, 0.01 + 0.002 * (daysInMonth - currentDay)]}
               />
-              <meshStandardMaterial color="#f5f0e8" roughness={0.9} />
+              <meshStandardMaterial color="#f5f0e8" />
             </mesh>
           )}
         </>
@@ -510,16 +409,16 @@ function Book({
   );
 }
 
+// --- Main Export ---
 export default function JournalBook() {
   const [isOpen, setIsOpen] = useState(false);
   const [bookIsOpen, setBookIsOpen] = useState(false);
+  const { currentDate, content, setContent, navigateDate } = useJournal();
 
   const now = new Date();
   const month = now.getMonth();
   const year = now.getFullYear();
   const daysInMonth = getDaysInMonth(year, month);
-
-  // Start at day 1
   const [currentDay, setCurrentDay] = useState(1);
   const [entries, setEntries] = useState<Record<number, string>>({
     1: "Start of a new month!\n\nWrite your thoughts here.",
@@ -531,105 +430,80 @@ export default function JournalBook() {
   }, []);
 
   const canGoBack = currentDay > 1;
-  // Can go forward if there is at least one more day after the current spread
   const canGoForward = currentDay + 1 < daysInMonth;
 
-  // Jump by 2 days (1 spread)
-  const handlePrev = () => {
-    setCurrentDay((d) => Math.max(1, d - 2));
-  };
+  const handlePrev = () => setCurrentDay((d) => Math.max(1, d - 2));
+  const handleNext = () => setCurrentDay((d) => Math.min(daysInMonth, d + 2));
 
-  const handleNext = () => {
-    setCurrentDay((d) => Math.min(daysInMonth, d + 2));
+  // Handler for Story Generation
+  const handleStoryGenerated = (story: string) => {
+    setEntries((prev) => ({
+      ...prev,
+      [currentDay]: prev[currentDay]
+        ? `${prev[currentDay]}\n\n${story}`
+        : story,
+    }));
   };
 
   return (
     <div className="w-full h-screen bg-gradient-to-b from-orange-50 to-amber-100 overflow-hidden select-none">
-      {/* Title */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 text-center">
-        <h1 className="text-2xl md:text-3xl font-serif text-amber-800">
-          {getMonthName(month)} {year}
-        </h1>
-        <p className="text-sm text-amber-600 mt-1">
-          {currentDay} — {Math.min(currentDay + 1, daysInMonth)}
-        </p>
+      {/* 1. UI Overlay (Generate Story & Nav) */}
+      <div className="absolute inset-0 z-50 pointer-events-none">
+        {/* Top Left: Generate Story Button */}
+        <div className="pointer-events-auto">
+          <GenerateStory
+            currentDate={new Date(year, month, currentDay)}
+            onStoryGenerated={handleStoryGenerated}
+          />
+        </div>
+
+        {/* Top Center: Title */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 text-center">
+          <h1 className="text-2xl md:text-3xl font-serif text-amber-800">
+            {getMonthName(month)} {year}
+          </h1>
+          <p className="text-sm text-amber-600 mt-1">
+            {currentDay} — {Math.min(currentDay + 1, daysInMonth)}
+          </p>
+        </div>
+
+        {/* Bottom Nav */}
+        <div className="absolute bottom-8 left-0 right-0 flex justify-center items-center gap-8 pointer-events-auto">
+          <button
+            onClick={handlePrev}
+            disabled={!canGoBack}
+            className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${canGoBack ? "bg-white hover:bg-amber-50 text-amber-600 hover:scale-110" : "bg-gray-200 text-gray-400"}`}
+          >
+            ←
+          </button>
+          <button
+            onClick={handleNext}
+            disabled={!canGoForward}
+            className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${canGoForward ? "bg-white hover:bg-amber-50 text-amber-600 hover:scale-110" : "bg-gray-200 text-gray-400"}`}
+          >
+            →
+          </button>
+        </div>
+
+        {/* Page Dots */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-1.5 flex-wrap justify-center max-w-xs pointer-events-auto">
+          {Array.from({ length: Math.ceil(daysInMonth / 2) }).map((_, i) => {
+            const spreadStartDay = i * 2 + 1;
+            const isActive =
+              currentDay === spreadStartDay ||
+              currentDay === spreadStartDay + 1;
+            return (
+              <button
+                key={i}
+                onClick={() => setCurrentDay(spreadStartDay)}
+                className={`h-2 rounded-full transition-all ${isActive ? "bg-amber-500 w-4" : "bg-amber-300 hover:bg-amber-400 w-2"}`}
+              />
+            );
+          })}
+        </div>
       </div>
 
-      {/* Left Arrow */}
-      <button
-        onClick={handlePrev}
-        disabled={!canGoBack}
-        className={`absolute left-3 md:left-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-          canGoBack
-            ? "bg-white hover:bg-amber-50 text-amber-600 hover:scale-110"
-            : "bg-gray-200 text-gray-400"
-        }`}
-      >
-        <svg
-          className="w-5 h-5 md:w-6 md:h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2.5}
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-      </button>
-
-      {/* Right Arrow */}
-      <button
-        onClick={handleNext}
-        disabled={!canGoForward}
-        className={`absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-          canGoForward
-            ? "bg-white hover:bg-amber-50 text-amber-600 hover:scale-110"
-            : "bg-gray-200 text-gray-400"
-        }`}
-      >
-        <svg
-          className="w-5 h-5 md:w-6 md:h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2.5}
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
-      </button>
-
-      {/* Page dots (now represents spreads) */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-1.5 flex-wrap justify-center max-w-xs">
-        {Array.from({ length: Math.ceil(daysInMonth / 2) }).map((_, i) => {
-          const spreadStartDay = i * 2 + 1;
-          const isActive =
-            currentDay === spreadStartDay || currentDay === spreadStartDay + 1;
-          return (
-            <button
-              key={i}
-              onClick={() => setCurrentDay(spreadStartDay)}
-              className={`h-2 rounded-full transition-all ${
-                isActive
-                  ? "bg-amber-500 w-4"
-                  : "bg-amber-300 hover:bg-amber-400 w-2"
-              }`}
-            />
-          );
-        })}
-      </div>
-
-      <p className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 text-amber-500 text-xs">
-        Click a page to write
-      </p>
-
-      {/* 3D Scene */}
+      {/* 2. 3D Scene */}
       <Canvas camera={{ position: [0, 0.5, 6], fov: 35 }} shadows>
         <color attach="background" args={["#fdf6e9"]} />
         <CameraController isOpen={isOpen} bookIsOpen={bookIsOpen} />

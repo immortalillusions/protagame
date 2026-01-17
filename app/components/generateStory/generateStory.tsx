@@ -1,18 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { format } from "date-fns";
 
 interface GenerateStoryProps {
   currentDate: Date;
+  onStoryGenerated: (story: string) => void;
 }
 
-export default function GenerateStory({ currentDate }: GenerateStoryProps) {
+export default function GenerateStory({
+  currentDate,
+  onStoryGenerated,
+}: GenerateStoryProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Form State
   const [selectedRange, setSelectedRange] = useState("current");
   const [genre, setGenre] = useState("Fantasy");
-  const [mood, setMood] = useState("");
+  const [mood, setMood] = useState("Mysterious");
   const [styleValue, setStyleValue] = useState(50);
 
   const getStyleLabel = (val: number) => {
@@ -21,148 +27,171 @@ export default function GenerateStory({ currentDate }: GenerateStoryProps) {
     return "Balanced";
   };
 
-  const handleGenerate = () => {
-    // Placeholder for your API call
-    console.log("Generating story...", {
-      range: selectedRange,
-      genre,
-      mood,
-      style: getStyleLabel(styleValue),
-    });
-    setIsOpen(false);
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+
+    // Construct the prompt
+    const style = getStyleLabel(styleValue);
+    const dateStr = format(currentDate, "MMMM d, yyyy");
+
+    const prompt = `Write a short, creative journal entry for ${dateStr}. 
+    Genre: ${genre}. 
+    Mood: ${mood}. 
+    Style: ${style}. 
+    Focus: ${selectedRange === "current" ? "Events of this specific day" : "A summary of recent events"}.
+    Keep it under 150 words and make it engaging.`;
+
+    try {
+      const response = await fetch("/hooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt }),
+      });
+
+      const data = await response.json();
+
+      if (data.response) {
+        onStoryGenerated(data.response);
+        setIsOpen(false);
+      }
+    } catch (error) {
+      console.error("Failed to generate story:", error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
     <>
-      {/* Floating Action Button (Left Side) */}
+      {/* Floating Action Button - Top Left */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed left-6 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-lg btn-primary shadow-xl border-4 border-white/50 hover:scale-110 transition-transform group"
+        className="fixed left-6 top-6 z-[60] flex items-center justify-center w-14 h-14 bg-amber-600 text-white rounded-full shadow-xl border-4 border-white/50 hover:scale-110 transition-transform group pointer-events-auto"
         title="Generate Story"
       >
-        <span className="text-2xl">✨</span>
+        <span className="text-2xl">{isGenerating ? "⏳" : "✨"}</span>
+
         {/* Tooltip Label */}
-        <span className="absolute left-full ml-4 bg-black/75 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+        <span className="absolute left-full ml-4 bg-black/75 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           Generate Story
         </span>
       </button>
 
-      {/* DaisyUI Modal */}
+      {/* Modal Dialog */}
       {isOpen && (
-        <dialog className="modal modal-open bg-black/40 backdrop-blur-sm">
-          <div className="modal-box bg-amber-50 border-2 border-amber-200 shadow-2xl max-w-md">
-            <form method="dialog">
-              <button
-                className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 text-amber-900"
-                onClick={() => setIsOpen(false)}
-              >
-                ✕
-              </button>
-            </form>
-
-            <h3 className="font-serif text-2xl font-bold text-amber-900 mb-6">
-              Weave a Story
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm pointer-events-auto">
+          <div className="bg-[#fdf6e9] border-2 border-amber-200 shadow-2xl max-w-md w-full p-6 rounded-xl relative">
+            <h3 className="font-serif text-2xl font-bold text-amber-900 mb-6 flex items-center gap-2">
+              <span>✨</span> Weaver's Inspiration
             </h3>
 
-            <div className="space-y-5">
-              {/* 1. Select Days */}
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-semibold text-amber-800">
-                    Which days?
-                  </span>
+            <div className="space-y-6">
+              {/* Range Selection */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-amber-800">
+                  Context Range
                 </label>
-                <select
-                  className="select select-bordered bg-white border-amber-200 focus:border-amber-500 text-amber-900"
-                  value={selectedRange}
-                  onChange={(e) => setSelectedRange(e.target.value)}
-                >
-                  <option value="current">Current Entry Only</option>
-                  <option value="week">Past 7 Days</option>
-                  <option value="month">Entire Month</option>
-                </select>
+                <div className="flex gap-2 w-full">
+                  <button
+                    className={`flex-1 py-2 px-4 rounded-lg border transition-colors ${selectedRange === "current" ? "bg-amber-600 text-white border-amber-600" : "border-amber-300 text-amber-900 hover:bg-amber-100"}`}
+                    onClick={() => setSelectedRange("current")}
+                  >
+                    Today
+                  </button>
+                  <button
+                    className={`flex-1 py-2 px-4 rounded-lg border transition-colors ${selectedRange === "week" ? "bg-amber-600 text-white border-amber-600" : "border-amber-300 text-amber-900 hover:bg-amber-100"}`}
+                    onClick={() => setSelectedRange("week")}
+                  >
+                    This Week
+                  </button>
+                </div>
               </div>
 
-              {/* 2. Genre */}
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-semibold text-amber-800">
-                    Genre
-                  </span>
+              {/* Genre Selection */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-amber-800">
+                  Genre
                 </label>
                 <select
-                  className="select select-bordered bg-white border-amber-200 focus:border-amber-500 text-amber-900"
+                  className="w-full p-2 rounded-lg border border-amber-300 bg-white/50 text-amber-900 focus:outline-none focus:border-amber-500"
                   value={genre}
                   onChange={(e) => setGenre(e.target.value)}
                 >
                   <option>Fantasy</option>
                   <option>Sci-Fi</option>
-                  <option>Mystery</option>
                   <option>Slice of Life</option>
+                  <option>Mystery</option>
                   <option>Horror</option>
                   <option>Adventure</option>
-                  <option>Noir</option>
                 </select>
               </div>
 
-              {/* 3. Mood */}
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-semibold text-amber-800">
-                    Mood
-                  </span>
+              {/* Mood Selection */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-amber-800">
+                  Mood
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Dreamy, Melancholic, Energetic..."
-                  className="input input-bordered bg-white border-amber-200 focus:border-amber-500 text-amber-900 placeholder-amber-900/40"
+                  placeholder="e.g. Mysterious, Joyful..."
+                  className="w-full p-2 rounded-lg border border-amber-300 bg-white/50 text-amber-900 placeholder-amber-900/40 focus:outline-none focus:border-amber-500"
                   value={mood}
                   onChange={(e) => setMood(e.target.value)}
                 />
               </div>
 
-              {/* 4. Abstract vs Reality */}
-              <div className="form-control pt-2">
-                <label className="label cursor-pointer justify-between">
-                  <span className="label-text font-semibold text-amber-800">
+              {/* Style Slider */}
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-semibold text-amber-800">
                     Style
-                  </span>
-                  <span className="badge badge-primary badge-outline">
+                  </label>
+                  <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded border border-amber-200">
                     {getStyleLabel(styleValue)}
                   </span>
-                </label>
+                </div>
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={styleValue}
                   onChange={(e) => setStyleValue(parseInt(e.target.value))}
-                  className="range range-primary range-xs"
+                  className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
                   step="25"
                 />
-                <div className="w-full flex justify-between text-xs px-2 mt-2 text-amber-700/60 font-medium">
+                <div className="w-full flex justify-between text-xs px-1 mt-1 text-amber-700/60 font-medium">
                   <span>Abstract</span>
                   <span>Reality</span>
                 </div>
               </div>
             </div>
 
-            <div className="modal-action mt-8">
+            <div className="flex justify-end gap-3 mt-8">
               <button
-                className="btn btn-ghost text-amber-800 hover:bg-amber-100"
+                className="px-4 py-2 text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
                 onClick={() => setIsOpen(false)}
+                disabled={isGenerating}
               >
                 Cancel
               </button>
               <button
-                className="btn btn-primary text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+                className="px-6 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 hover:shadow-lg transition-all min-w-[120px] flex justify-center items-center"
                 onClick={handleGenerate}
+                disabled={isGenerating}
               >
-                ✨ Generate
+                {isGenerating ? "Generating..." : "✨ Generate"}
               </button>
             </div>
+
+            {/* Close button X */}
+            <button
+              onClick={() => setIsOpen(false)}
+              className="absolute top-4 right-4 text-amber-800/50 hover:text-amber-800 transition-colors"
+            >
+              ✕
+            </button>
           </div>
-        </dialog>
+        </div>
       )}
     </>
   );
