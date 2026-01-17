@@ -236,12 +236,12 @@ export default function JournalBook() {
           <div className="absolute inset-0 bg-[#3a2e22] rounded-r-xl rounded-l-md transform translate-z-[-5px] shadow-2xl border-l-[12px] border-[#2a2118]" />
 
           {/* 3. The Paper Block (Main writing surface) */}
-          <div className="relative bg-[var(--c-cream)] rounded-r-lg min-h-[80vh] shadow-[inset_10px_0_20px_rgba(0,0,0,0.05)] border-r-4 border-[#e6e2d6] paper-texture flex overflow-hidden">
+          <div className="relative bg-[var(--c-cream)] rounded-r-lg min-h-[90vh] shadow-[inset_10px_0_20px_rgba(0,0,0,0.05)] border-r-4 border-[#e6e2d6] paper-texture flex overflow-hidden">
             {/* Spine/Gutter Shadow */}
             <div className="absolute left-0 top-0 bottom-0 w-16 bg-[image:var(--spine-gradient)] pointer-events-none z-20 mix-blend-multiply" />
 
             {/* Content Container */}
-            <div className="flex-1 pl-16 pr-12 py-12 flex flex-col relative z-10">
+            <div className="flex-1 pl-16 pr-12 pt-12 pb-0 flex flex-col relative">
               {/* Header: Date Navigation */}
               <div className="flex items-center justify-between mb-10 pb-6 border-b border-[var(--c-gold)]/30">
                 <button
@@ -273,7 +273,7 @@ export default function JournalBook() {
               </div>
 
               {/* Main Content Area - 2 Column Layout */}
-              <div className="flex-1 flex gap-12 relative max-h-[calc(80vh-200px)] overflow-hidden">
+              <div className="flex-1 flex gap-12 relative max-h-[calc(90vh-200px)] overflow-hidden">
                 {/* Left Column: Text Area */}
                 <div className="flex-1 flex flex-col min-w-0 scrollbar-thin">
                   <div className="flex-1 overflow-hidden">
@@ -316,9 +316,9 @@ export default function JournalBook() {
                 <div className="w-80 flex flex-col gap-8 shrink-0 relative z-20">
                   {/* Visual Prompt Card */}
                   {entry?.visualPrompt ? (
-                    <div className="w-full bg-white p-3 shadow-lg transform rotate-1 hover:rotate-0 transition-all duration-500 border border-[var(--c-tan)] lift-on-hover">
+                    <div className="w-80 h-200 bg-white p-3 shadow-lg transform rotate-1 hover:rotate-0 transition-all duration-500 border border-[var(--c-tan)] lift-on-hover flex flex-col overflow-hidden">
                       {entry.mediaUrl && (
-                        <div className="relative aspect-video mb-3 overflow-hidden bg-[var(--c-tan)]">
+                        <div className="relative aspect-video mb-3 overflow-hidden bg-[var(--c-tan)] flex-shrink-0">
                           <Image
                             src={entry.mediaUrl}
                             alt="Cinematic scene"
@@ -328,11 +328,13 @@ export default function JournalBook() {
                           />
                         </div>
                       )}
-                      <div className="space-y-2">
-                        <p className="font-serif text-sm text-[var(--c-ink)] leading-snug italic">
-                          "{entry.visualPrompt.visualPrompt}"
-                        </p>
-                        <div className="flex gap-1 flex-wrap pt-1 border-t border-[var(--c-tan)]">
+                      <div className="flex-1 flex flex-col min-h-0">
+                        <div className="flex-1 overflow-y-auto scrollbar-thin pr-2 mb-3">
+                          <p className="pl-1 font-serif text-sm text-[var(--c-ink)] leading-relaxed text-center">
+                            {entry.visualPrompt.visualPrompt.replace(/[.!?]+$/, '')}
+                          </p>
+                        </div>
+                        <div className="flex justify-center pt-3 border-t border-[var(--c-tan)] flex-shrink-0">
                           <span className="text-[10px] uppercase tracking-wider text-[var(--c-gold)] font-bold">
                             {entry.visualPrompt.mood}
                           </span>
@@ -341,7 +343,7 @@ export default function JournalBook() {
                     </div>
                   ) : (
                     /* Placeholder area if no image yet, to maintain balance or show empty state */
-                    <div className="w-full aspect-[4/5] border-2 border-dashed border-[var(--c-gold)]/20 rounded-sm flex items-center justify-center">
+                    <div className="w-full h-48 border-2 border-dashed border-[var(--c-gold)]/20 rounded-sm flex items-center justify-center">
                       <span className="text-[var(--c-gold)]/40 font-serif italic text-2xl">
                         ?
                       </span>
@@ -358,6 +360,8 @@ export default function JournalBook() {
                       shadow-lg hover:shadow-xl disabled:opacity-50 disabled:shadow-none
                       lift-on-hover press-on-click
                       overflow-hidden rounded-sm
+                      flex items-center justify-center
+                      -mt-4
                     "
                   >
                     <span className="relative z-10 flex items-center justify-center gap-2">
