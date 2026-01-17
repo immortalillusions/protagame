@@ -90,7 +90,7 @@ export class AIMediaPipeline {
           'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
-          'X-Title': process.env.NEXT_PUBLIC_SITE_NAME || 'ProtaGame',
+          'X-Title': process.env.NEXT_PUBLIC_SITE_NAME || 'ProtagaMe',
         },
         body: JSON.stringify({
           model: 'black-forest-labs/flux.2-klein-4b',

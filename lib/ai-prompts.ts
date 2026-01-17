@@ -1,4 +1,4 @@
-// AI Pipeline Prompts for ProtaGame
+// AI Pipeline Prompts for ProtagaMe
 
 export const TEXT_TO_VISUAL_SYSTEM_PROMPT = `You are a cinematic storyteller and visual prompt expert. Your job is to transform personal journal entries into evocative visual prompts for media generation.
 
