@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import JsonJournalService from '@/lib/json-journal-service';
+import JournalService from '@/lib/journal-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      const entry = await JsonJournalService.saveEntry({
+      const entry = await JournalService.saveEntry({
         date,
         content: '', // Empty content for journey stories
         story,
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const entry = await JsonJournalService.saveEntry({
+    const entry = await JournalService.saveEntry({
       date,
       content,
       story,
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const entry = await JsonJournalService.getEntryByDate(date);
+    const entry = await JournalService.getEntryByDate(date);
     
     return NextResponse.json({
       success: true,

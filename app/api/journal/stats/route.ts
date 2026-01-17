@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import JsonJournalService from '@/lib/json-journal-service';
+import JournalService from '@/lib/journal-service';
 
 export async function GET() {
   try {
-    const stats = await JsonJournalService.getStats();
+    const stats = await JournalService.getStats();
 
     return NextResponse.json({
       success: true,

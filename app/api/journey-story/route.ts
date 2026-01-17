@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import JsonJournalService from '@/lib/json-journal-service';
+import JournalService from '@/lib/journal-service';
 
 export async function POST(request: NextRequest) {
   try {
     const { genre, mood, style, length = "long" } = await request.json();
 
     // Get all journal entries formatted for story generation
-    const allEntries = await JsonJournalService.getAllEntriesForStory();
+    const allEntries = await JournalService.getAllEntriesForStory();
     
     if (!allEntries || allEntries.trim() === "No journal entries found.") {
       return NextResponse.json(
