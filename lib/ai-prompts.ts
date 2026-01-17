@@ -1,4 +1,4 @@
-// AI Pipeline Prompts for ProtagaMe
+// AI Pipeline Prompts for ProtaGame
 
 export const TEXT_TO_VISUAL_SYSTEM_PROMPT = `You are a cinematic storyteller and visual prompt expert. Your job is to transform personal journal entries into evocative visual prompts for media generation.
 
@@ -31,7 +31,7 @@ export const VISUAL_GENERATION_PROMPT_TEMPLATE = (
   mood: string,
   colorPalette: string,
   cinematicStyle: string
-) => `Create a fast, symbolic image:
+) => `Create a cinematic, symbolic image with subtle motion potential:
 
 VISUAL: ${visualPrompt}
 MOOD: ${mood}
@@ -39,14 +39,14 @@ COLORS: ${colorPalette}
 STYLE: ${cinematicStyle}
 
 Requirements:
-- Simple, clean composition for fast generation
-- Symbolic/metaphorical imagery
-- ${cinematicStyle}
-- ${colorPalette} color scheme
-- Optimized for speed and web display
-- Minimal details, maximum impact
+- High visual quality, artistic composition
+- Symbolic/metaphorical rather than literal
+- Suitable for 2-3 second animation loop
+- No text, people, or specific locations
+- Cinematic lighting and depth
+- 16:9 aspect ratio preferred
 
-Style: Cinematic, symbolic, fast generation, ${mood} mood`;
+Style: Cinematic still, film photography, dramatic lighting, symbolic imagery`;
 
 export const generateJournalPrompt = (journalEntry: string) => `
 Transform this journal entry into a cinematic visual prompt:
