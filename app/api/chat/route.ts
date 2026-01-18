@@ -33,8 +33,23 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('OpenRouter API error:', error);
+    
+    // Check for OpenRouter credit/quota errors
+    let errorMessage = 'Failed to get AI response';
+    if (error instanceof Error) {
+      const errorStr = error.message.toLowerCase();
+      if (errorStr.includes('credits') || 
+          errorStr.includes('quota') || 
+          errorStr.includes('billing') || 
+          errorStr.includes('insufficient funds') ||
+          errorStr.includes('balance') ||
+          errorStr.includes('payment')) {
+        errorMessage = 'OpenRouter account has insufficient credits. Please add more credits to continue generating stories.';
+      }
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to get AI response' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

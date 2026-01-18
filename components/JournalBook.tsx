@@ -534,7 +534,19 @@ export default function JournalBook() {
 
     } catch (error) {
       console.error("Speech generation failed:", error);
-      alert("Failed to generate speech. Please try again.");
+      // Check for ElevenLabs credit/quota errors
+      if (error instanceof Error && (
+        error.message.includes('credits') || 
+        error.message.includes('quota') || 
+        error.message.includes('billing') || 
+        error.message.includes('insufficient funds') ||
+        error.message.includes('balance') ||
+        error.message.includes('subscription')
+      )) {
+        alert("⚠️ ElevenLabs Credits Exhausted!\n\nYour ElevenLabs account has run out of credits. Please add more credits to continue generating voice narrations.\n\nVisit: https://elevenlabs.io/subscription");
+      } else {
+        alert("Failed to generate speech. Please try again.");
+      }
     } finally {
       setIsGeneratingSpeech(false);
     }

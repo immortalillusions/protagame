@@ -103,9 +103,17 @@ Make the writing engaging and creative.`;
       if (data.response) {
         onStoryGenerated(data.response);
         setIsOpen(false);
+      } else if (data.error) {
+        // Check for credit/quota errors
+        if (data.error.includes('credits') || data.error.includes('quota') || data.error.includes('billing') || data.error.includes('insufficient funds')) {
+          alert("⚠️ API Credits Exhausted!\n\nOpenRouter has run out of credits. Please add more credits to your OpenRouter account to continue generating stories.\n\nVisit: https://openrouter.ai/credits");
+        } else {
+          alert(`Failed to generate story: ${data.error}`);
+        }
       }
     } catch (error) {
       console.error("Failed to generate story:", error);
+      alert("Failed to generate story. Please check your internet connection and try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -156,11 +164,21 @@ Make the writing engaging and creative.`;
         
         setIsOpen(false);
       } else {
-        alert(data.error || "Failed to generate journey story");
+        // Check for credit/quota errors
+        if (data.error && (data.error.includes('credits') || data.error.includes('quota') || data.error.includes('billing') || data.error.includes('insufficient funds'))) {
+          alert("⚠️ API Credits Exhausted!\n\nOpenRouter has run out of credits. Please add more credits to your OpenRouter account to continue generating journey stories.\n\nVisit: https://openrouter.ai/credits");
+        } else {
+          alert(data.error || "Failed to generate journey story");
+        }
       }
     } catch (error) {
       console.error("Failed to generate journey story:", error);
-      alert("Failed to generate journey story");
+      // Check if it's a network error or server error that might indicate credit issues
+      if (error instanceof Error && (error.message.includes('credits') || error.message.includes('quota') || error.message.includes('billing'))) {
+        alert("⚠️ API Credits Exhausted!\n\nOpenRouter has run out of credits. Please add more credits to your OpenRouter account to continue generating journey stories.\n\nVisit: https://openrouter.ai/credits");
+      } else {
+        alert("Failed to generate journey story. Please check your internet connection and try again.");
+      }
     } finally {
       setIsGeneratingJourney(false);
     }

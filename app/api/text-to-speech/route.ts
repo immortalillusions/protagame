@@ -92,8 +92,23 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Text-to-speech generation failed:', error);
+    
+    // Check for ElevenLabs credit/quota errors
+    let errorMessage = 'Failed to generate speech';
+    if (error instanceof Error) {
+      const errorStr = error.message.toLowerCase();
+      if (errorStr.includes('credits') || 
+          errorStr.includes('quota') || 
+          errorStr.includes('billing') || 
+          errorStr.includes('insufficient funds') ||
+          errorStr.includes('balance') ||
+          errorStr.includes('subscription')) {
+        errorMessage = 'ElevenLabs account has insufficient credits. Please add more credits to continue generating voice narrations.';
+      }
+    }
+    
     return NextResponse.json(
-      { success: false, error: 'Failed to generate speech' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

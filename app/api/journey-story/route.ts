@@ -61,8 +61,23 @@ Create a beautiful story that honors the user's real experiences while transform
 
   } catch (error) {
     console.error('Journey story generation error:', error);
+    
+    // Check for OpenRouter credit/quota errors
+    let errorMessage = 'Failed to generate journey story';
+    if (error instanceof Error) {
+      const errorStr = error.message.toLowerCase();
+      if (errorStr.includes('credits') || 
+          errorStr.includes('quota') || 
+          errorStr.includes('billing') || 
+          errorStr.includes('insufficient funds') ||
+          errorStr.includes('balance') ||
+          errorStr.includes('payment')) {
+        errorMessage = 'OpenRouter account has insufficient credits. Please add more credits to continue generating journey stories.';
+      }
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to generate journey story' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
