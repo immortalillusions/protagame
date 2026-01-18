@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { format, addDays, subDays } from "date-fns";
 import Image from "next/image";
+import { Mic, CirclePause, CirclePlay } from "lucide-react";
 import GenerateStory from "../app/components/summary/generateStory";
 import JournalEditor from "./JournalEditor";
+import Calendar from "../app/components/calendar/calendar";
 
 // Audio hook for managing sounds
 function useAudio() {
@@ -140,6 +142,7 @@ export default function JournalBook() {
   const [pendingSaves, setPendingSaves] = useState(new Set<string>());
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [entriesWithContent, setEntriesWithContent] = useState<Set<string>>(new Set());
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Audio hook
@@ -314,6 +317,31 @@ export default function JournalBook() {
       loadJournalEntry(newDateStr);
     }
   }, [currentDate, entries, loadJournalEntry]);
+
+  // Load all entry dates for calendar indicators
+  useEffect(() => {
+    const loadEntryDates = async () => {
+      try {
+        const response = await fetch("/api/journal/list");
+        const data = await response.json();
+
+        if (data.success && data.entries) {
+          const dates = new Set<string>(
+            data.entries
+              .filter(
+                (entry: JournalEntry) => entry.content && entry.content.trim(),
+              )
+              .map((entry: JournalEntry) => entry.date),
+          );
+          setEntriesWithContent(dates);
+        }
+      } catch (error) {
+        console.error("Failed to load entry dates:", error);
+      }
+    };
+
+    loadEntryDates();
+  }, [lastSaved]); // Refresh when entries are saved
 
   const generateMedia = async () => {
     if (!localContent.trim()) {
@@ -562,6 +590,37 @@ export default function JournalBook() {
     }
   }, [isPlayingAudio]);
 
+  // Handle date selection from calendar
+  const handleCalendarDateSelect = useCallback(
+    (date: Date) => {
+      // Play page flip sound
+      playPageFlip();
+
+      // Save current content before navigating if there are unsaved changes
+      if (
+        localContent.trim() &&
+        localContent !== (currentEntry?.content || "")
+      ) {
+        fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent.trim(),
+            story: currentEntry?.story,
+            visualPrompt: currentEntry?.visualPrompt,
+            mediaUrl: currentEntry?.mediaUrl,
+          }),
+        }).catch((error) => {
+          console.error("Failed to save before navigation:", error);
+        });
+      }
+
+      setCurrentDate(date);
+    },
+    [localContent, currentEntry, dateStr, playPageFlip],
+  );
+
   // Get display content based on current mode
   const displayContent = showStory ? currentEntry?.story || "" : localContent;
   const isStoryMode = showStory;
@@ -578,15 +637,7 @@ export default function JournalBook() {
       : "Unsaved changes";
 
   return (
-    <div
-      className="min-h-screen p-8 flex items-center justify-center overflow-hidden relative"
-      style={{
-        backgroundImage: "url(/desk.jpg)",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        backgroundAttachment: "fixed",
-      }}
+    <div className="min-h-screen p-8 flex items-center justify-center overflow-hidden relative bg-[#E6E2D6]"
     >
       {/* Generate Story Button - Floating */}
       <GenerateStory
@@ -595,7 +646,14 @@ export default function JournalBook() {
         currentJournalContent={localContent}
       />
 
-      {/* Music Toggle Button - Top Right */}
+      {/* Calendar - Top Right */}
+      <Calendar
+        currentDate={currentDate}
+        onDateSelect={handleCalendarDateSelect}
+        entriesWithContent={entriesWithContent}
+      />
+
+      {/* Music Toggle Button - Bottom Right */}
       <button
         onClick={toggleMusic}
         className={`fixed right-6 bottom-6 z-[60] flex items-center justify-center w-14 h-14 rounded-full shadow-xl border-4 border-white/50 transition-all group pointer-events-auto ${
@@ -754,12 +812,12 @@ export default function JournalBook() {
                         }
                       >
                         {isGeneratingSpeech 
-                          ? "🎤..." 
+                          ? <><Mic className="w-4 h-4 animate-spin" />...</>
                           : currentEntry?.audioUrl 
                             ? isPlayingAudio 
-                              ? "⏸️" 
-                              : "▶️" 
-                            : "🎤"}
+                              ? <CirclePause className="w-4 h-4" />
+                              : <CirclePlay className="w-4 h-4" />
+                            : <Mic className="w-4 h-4" />}
                       </button>
                     )}
                   </div>
