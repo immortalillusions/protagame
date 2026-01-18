@@ -360,29 +360,20 @@ export default function JournalBook() {
           return updated;
         });
 
-        // Save to backend in background
-        const saveResponse = await fetch("/api/journal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: dateStr,
-            content: localContent.trim(),
-            story: currentEntry?.story,
-            visualPrompt: data.visualPrompt,
-            mediaUrl: data.mediaUrl || currentEntry?.mediaUrl,
-          }),
-        });
-
-        if (saveResponse.ok) {
-          setLastSaved(new Date());
-        } else {
-          console.error(
-            "Failed to save media generation:",
-            await saveResponse.text(),
-          );
-        }
+        // The /api/generate-media endpoint already saves to the database
+        setLastSaved(new Date());
       } else {
-        alert(data.error || "Failed to generate media");
+        // Check for OpenRouter credit errors
+        if (data.error && (
+          data.error.includes('credits') || 
+          data.error.includes('insufficient funds') || 
+          data.error.includes('billing') || 
+          data.error.includes('quota')
+        )) {
+          alert("⚠️ OpenRouter Credits Exhausted!\n\nYour OpenRouter account has run out of credits. Please add more credits to continue generating images.\n\nVisit: https://openrouter.ai/credits");
+        } else {
+          alert(data.error || "Failed to generate media");
+        }
       }
     } catch (error) {
       console.error("Media generation failed:", error);
