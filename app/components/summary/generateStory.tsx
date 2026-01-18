@@ -188,7 +188,7 @@ Make the writing engaging and creative.`;
         disabled={!journeyStory}
         className={`fixed left-6 top-24 z-[60] flex items-center justify-center w-14 h-14 rounded-full shadow-xl border-4 border-white/50 transition-all group pointer-events-auto ${
           journeyStory 
-            ? 'bg-orange-500 text-white hover:scale-110 cursor-pointer' 
+            ? 'bg-amber-600 text-white hover:scale-110 cursor-pointer' 
             : 'bg-gray-300 text-gray-500 cursor-not-allowed'
         }`}
         title={journeyStory ? "View Journey Story" : "Generate a Journey Story first"}
@@ -309,12 +309,12 @@ Make the writing engaging and creative.`;
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-indigo-400 animate-pulse opacity-20"></div>
                   <span className="relative z-10 flex items-center justify-center gap-2 font-semibold">
-                    {isGeneratingJourney ? "Weaving Journey..." : "🌟 Create Journey Story"}
+                    {isGeneratingJourney ? "Weaving Journey..." : "Create Life Story"}
                   </span>
                 </button>
                 
                 {/* Tooltip */}
-                <div className="absolute left-1/2 transform -translate-x-1/2 -top-16 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                <div className="absolute left-1/2 transform -translate-x-1/2 -top-16 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-[60]">
                   Combines all your journal entries into one epic story
                   <div className="absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                 </div>
@@ -329,13 +329,21 @@ Make the writing engaging and creative.`;
                 >
                   Cancel
                 </button>
-                <button
-                  className="px-6 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 hover:shadow-lg transition-all min-w-[120px] flex justify-center items-center disabled:opacity-50"
-                  onClick={handleGenerate}
-                  disabled={isGenerating || isGeneratingJourney}
-                >
-                  {isGenerating ? "Generating..." : "✨ Generate"}
-                </button>
+                <div className="relative group">
+                  <button
+                    className="px-6 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 hover:shadow-lg transition-all min-w-[120px] flex justify-center items-center disabled:opacity-50"
+                    onClick={handleGenerate}
+                    disabled={isGenerating || isGeneratingJourney}
+                  >
+                    {isGenerating ? "Generating..." : "Generate for Today"}
+                  </button>
+                  
+                  {/* Tooltip */}
+                  <div className="absolute left-1/2 transform -translate-x-1/2 -top-12 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-[60]">
+                    Generate story for current day only
+                    <div className="absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                  </div>
+                </div>
               </div>
             </div>
 

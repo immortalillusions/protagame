@@ -371,7 +371,14 @@ export default function JournalBook() {
       : "Unsaved changes";
 
   return (
-    <div className="min-h-screen bg-[var(--c-tan)] p-8 flex items-center justify-center overflow-hidden">
+    <div className="min-h-screen p-8 flex items-center justify-center overflow-hidden relative"
+         style={{
+           backgroundImage: 'url(/desk.jpg)',
+           backgroundSize: 'cover',
+           backgroundPosition: 'center',
+           backgroundRepeat: 'no-repeat',
+           backgroundAttachment: 'fixed'
+         }}>
       {/* Generate Story Button - Floating */}
       <GenerateStory
         currentDate={currentDate}
@@ -379,8 +386,8 @@ export default function JournalBook() {
         currentJournalContent={localContent}
       />
 
-      {/* Ambient environment light */}
-      <div className="fixed inset-0 pointer-events-none bg-gradient-radial from-[var(--c-cream)]/20 to-[var(--c-ink)]/5" />
+      {/* Ambient environment overlay for readability */}
+      <div className="fixed inset-0 pointer-events-none bg-black/20" />
 
       <div className="max-w-6xl w-full mx-auto relative perspective-container z-10">
         {/* Book Container - The Physical Object */}
