@@ -16,6 +16,9 @@ export interface JournalEntry {
   story?: string;
   visualPrompt?: VisualPrompt;
   mediaUrl?: string;
+  audioUrl?: string;
+  audioFormat?: string;
+  audioGenerated?: string;
   createdAt: Date;
   updatedAt: Date;
 }

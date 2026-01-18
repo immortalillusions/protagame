@@ -77,6 +77,9 @@ interface JournalEntry {
   story?: string;
   visualPrompt?: VisualPrompt;
   mediaUrl?: string;
+  audioUrl?: string;
+  audioFormat?: string;
+  audioGenerated?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -135,6 +138,9 @@ export default function JournalBook() {
   const [showStory, setShowStory] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [pendingSaves, setPendingSaves] = useState(new Set<string>());
+  const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Audio hook
   const { playPageFlip, toggleMusic, isMusicPlaying, isMusicLoaded } =
@@ -235,6 +241,16 @@ export default function JournalBook() {
         const entry = entries.get(date);
         setLocalContent(entry?.content || "");
         setShowStory(false);
+        
+        // Load saved audio if available
+        if (entry?.audioUrl && audioRef.current) {
+          audioRef.current.src = entry.audioUrl;
+          // Set up event handlers for existing audio
+          audioRef.current.onplay = () => setIsPlayingAudio(true);
+          audioRef.current.onpause = () => setIsPlayingAudio(false);
+          audioRef.current.onended = () => setIsPlayingAudio(false);
+        }
+        
         return;
       }
 
@@ -248,6 +264,15 @@ export default function JournalBook() {
           // Only update localContent if we're still on the same date
           if (format(currentDate, "yyyy-MM-dd") === date) {
             setLocalContent(data.entry.content);
+            
+            // Load saved audio if available
+            if (data.entry.audioUrl && audioRef.current) {
+              audioRef.current.src = data.entry.audioUrl;
+              // Set up event handlers for existing audio
+              audioRef.current.onplay = () => setIsPlayingAudio(true);
+              audioRef.current.onpause = () => setIsPlayingAudio(false);
+              audioRef.current.onended = () => setIsPlayingAudio(false);
+            }
           }
         } else {
           // Only clear content if we're still on the same date
@@ -442,6 +467,92 @@ export default function JournalBook() {
     [dateStr, localContent, currentEntry],
   );
 
+  // Handle text-to-speech generation and playback
+  const handleGenerateSpeech = useCallback(async () => {
+    if (!currentEntry?.story || !currentEntry.story.trim()) {
+      alert("No story content to read!");
+      return;
+    }
+
+    setIsGeneratingSpeech(true);
+    
+    try {
+      // Stop any currently playing audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setIsPlayingAudio(false);
+      }
+
+      const response = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: currentEntry.story,
+          date: dateStr, // Pass the date to save audio to database
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate speech");
+      }
+
+      // Convert response to blob and create audio URL
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Update the current entry with the audio URL
+      setEntries((prev) => {
+        const updated = new Map(prev);
+        const existing = updated.get(dateStr);
+        if (existing) {
+          updated.set(dateStr, {
+            ...existing,
+            audioUrl: audioUrl,
+            audioFormat: 'mp3',
+            audioGenerated: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        return updated;
+      });
+
+      // Create and configure audio element
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.onplay = () => setIsPlayingAudio(true);
+        audioRef.current.onpause = () => setIsPlayingAudio(false);
+        audioRef.current.onended = () => {
+          setIsPlayingAudio(false);
+          URL.revokeObjectURL(audioUrl); // Clean up object URL
+        };
+        
+        // Start playing automatically after generation
+        await audioRef.current.play();
+      }
+
+    } catch (error) {
+      console.error("Speech generation failed:", error);
+      alert("Failed to generate speech. Please try again.");
+    } finally {
+      setIsGeneratingSpeech(false);
+    }
+  }, [currentEntry?.story, dateStr]);
+
+  // Handle audio play/pause toggle
+  const toggleAudioPlayback = useCallback(() => {
+    if (!audioRef.current) return;
+
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch((error) => {
+        console.error("Failed to resume audio playback:", error);
+      });
+    }
+  }, [isPlayingAudio]);
+
   // Get display content based on current mode
   const displayContent = showStory ? currentEntry?.story || "" : localContent;
   const isStoryMode = showStory;
@@ -540,6 +651,9 @@ export default function JournalBook() {
       {/* Ambient environment overlay for readability */}
       <div className="fixed inset-0 pointer-events-none bg-black/20" />
 
+      {/* Hidden audio element for speech playback */}
+      <audio ref={audioRef} preload="none" />
+
       <div className="max-w-6xl w-full mx-auto relative perspective-container z-10">
         {/* Book Container - The Physical Object */}
         <div className="relative layer-3d group">
@@ -613,6 +727,32 @@ export default function JournalBook() {
                     >
                       Journal
                     </button>
+                    
+                    {/* Voice Button - Only show when on Story tab and story exists */}
+                    {showStory && currentEntry?.story && (
+                      <button
+                        onClick={currentEntry?.audioUrl ? toggleAudioPlayback : handleGenerateSpeech}
+                        disabled={isGeneratingSpeech}
+                        className="px-3 py-2 text-sm font-serif rounded-lg transition-all bg-purple-600/20 text-purple-800 hover:bg-purple-600/30 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-purple-600/30 hover:border-purple-600/50"
+                        title={
+                          isGeneratingSpeech
+                            ? "Generating voice narration..."
+                            : currentEntry?.audioUrl
+                            ? isPlayingAudio
+                              ? "Pause narration"
+                              : "Play narration"
+                            : "Generate voice narration"
+                        }
+                      >
+                        {isGeneratingSpeech 
+                          ? "🎤..." 
+                          : currentEntry?.audioUrl 
+                            ? isPlayingAudio 
+                              ? "⏸️" 
+                              : "▶️" 
+                            : "🎤"}
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-hidden">
