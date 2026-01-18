@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, memo } from "react";
-import { format, addDays, subDays } from "date-fns";
+import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from "date-fns";
 import Image from "next/image";
 import GenerateStory from "../app/components/summary/generateStory";
 
@@ -74,6 +74,9 @@ export default function JournalBook() {
   const [showStory, setShowStory] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [pendingSaves, setPendingSaves] = useState(new Set<string>());
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [viewingMode, setViewingMode] = useState(false);
 
   const dateStr = format(currentDate, "yyyy-MM-dd");
   const displayDate = format(currentDate, "MMMM d, yyyy");
@@ -128,7 +131,7 @@ export default function JournalBook() {
       
       timeouts.set(date, timeout);
     };
-  }, [entries]);
+  }, []); // Empty dependency array - we don't need entries here because we access it from closure
   
   // Memoized handlers to prevent re-renders
   const handleContentChange = useCallback((value: string) => {
@@ -194,9 +197,9 @@ export default function JournalBook() {
         setShowStory(false);
       }
     }
-  }, [entries, currentDate]);
+  }, [currentDate]); // Only depend on currentDate, not entries
 
-  // Load data when date changes
+  // Load data when date changes (only trigger on currentDate change)
   useEffect(() => {
     const newDateStr = format(currentDate, "yyyy-MM-dd");
     
@@ -206,14 +209,16 @@ export default function JournalBook() {
       // Use cached content immediately
       setLocalContent(cachedEntry.content);
       setShowStory(false);
+      setViewingMode(true);
     } else {
       // Clear content immediately for new date, load in background
       setLocalContent("");
       setShowStory(false);
+      setViewingMode(false);
       // Load new content in background without blocking UI
       loadJournalEntry(newDateStr);
     }
-  }, [currentDate, entries, loadJournalEntry]);
+  }, [currentDate]); // Only depend on currentDate changes, not entries
 
   const generateMedia = async () => {
     if (!localContent.trim()) {
@@ -353,6 +358,105 @@ export default function JournalBook() {
     }
   }, [dateStr, localContent, currentEntry]);
 
+  // Load all journal entries to show in calendar
+  const loadAllEntries = useCallback(async () => {
+    try {
+      const response = await fetch("/api/journal/list");
+      const data = await response.json();
+      
+      if (data.success && data.entries) {
+        const entriesMap = new Map<string, JournalEntry>();
+        data.entries.forEach((entry: JournalEntry) => {
+          entriesMap.set(entry.date, entry);
+        });
+        setEntries(prev => new Map([...prev, ...entriesMap]));
+      }
+    } catch (error) {
+      console.error("Failed to load all entries:", error);
+    }
+  }, []);
+
+  // Handle opening calendar - load all entries first
+  const handleOpenCalendar = useCallback(() => {
+    loadAllEntries();
+    setShowCalendar(true);
+  }, [loadAllEntries]);
+
+  // Calendar handler - select a date and load/create entry
+  const handleCalendarDateSelect = useCallback((selectedDate: Date) => {
+    const newDateStr = format(selectedDate, "yyyy-MM-dd");
+    const hasEntry = entries.has(newDateStr);
+    
+    setCurrentDate(selectedDate);
+    setViewingMode(hasEntry);
+    setShowCalendar(false);
+  }, [entries]);
+
+  // Render calendar grid
+  const renderCalendarGrid = useCallback(() => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    
+    // Get starting day of week (0 = Sunday)
+    const startingDayOfWeek = monthStart.getDay();
+    
+    // Create array with empty slots for days before month starts
+    const days: (Date | null)[] = Array(startingDayOfWeek).fill(null).concat(daysInMonth);
+    
+    return (
+      <div className="grid grid-cols-7 gap-3">
+        {/* Day headers */}
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+          <div key={day} className="text-center text-lg font-semibold py-3" style={{ color: 'var(--c-ink)' }}>
+            {day}
+          </div>
+        ))}
+        
+        {/* Calendar days */}
+        {days.map((day, index) => {
+          if (!day) {
+            return <div key={`empty-${index}`} />;
+          }
+          
+          const dateStr = format(day, "yyyy-MM-dd");
+          const hasEntry = entries.has(dateStr);
+          const isToday = format(new Date(), "yyyy-MM-dd") === dateStr;
+          const isFutureDate = day > new Date();
+          
+          return (
+            <button
+              key={dateStr}
+              onClick={() => !isFutureDate && handleCalendarDateSelect(day)}
+              disabled={isFutureDate}
+              className={`p-4 rounded text-xl font-medium transition-all relative ${
+                !isFutureDate ? 'hover:scale-105 transform' : 'cursor-not-allowed'
+              } ${
+                isToday ? 'ring-2 ring-offset-1' : ''
+              }`}
+              style={{
+                backgroundColor: isFutureDate ? '#d3d3d3' : (hasEntry ? 'var(--c-cream)' : 'transparent'),
+                color: isFutureDate ? '#999999' : (hasEntry ? '#D4AF37' : 'var(--c-ink)'),
+                borderColor: isToday && !isFutureDate ? 'var(--c-ink)' : 'transparent',
+                minHeight: '60px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isFutureDate ? 0.5 : 1,
+              }}
+            >
+              {format(day, 'd')}
+              {hasEntry && !isFutureDate && (
+                <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-2 h-2 rounded-full" 
+                     style={{ backgroundColor: '#D4AF37' }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }, [calendarMonth, entries, handleCalendarDateSelect]);
+
   // Remove the auto-save useEffect entirely as it's handled by debounced save
 
   // Get display content based on current mode
@@ -385,6 +489,34 @@ export default function JournalBook() {
         onStoryGenerated={handleStoryGenerated}
         currentJournalContent={localContent}
       />
+
+      {/* Journey Navigation Button - Floating Circle on Right */}
+      <div className="fixed right-8 top-8 z-40 group">
+        <button
+          onClick={handleOpenCalendar}
+          className="
+            w-16 h-16 rounded-full bg-amber-600 text-white
+            flex items-center justify-center text-3xl
+            shadow-xl border-4 border-white/50
+            transition-all duration-300
+            hover:scale-110
+            lift-on-hover press-on-click
+          "
+        >
+          🗺️
+        </button>
+        {/* Hover label */}
+        <div className="
+          absolute right-0 top-20 bg-[var(--c-ink)] text-[var(--c-cream)]
+          text-sm font-serif px-4 py-2 rounded whitespace-nowrap
+          opacity-0 group-hover:opacity-100
+          transition-opacity duration-300
+          pointer-events-none
+          shadow-lg
+        ">
+          Journey Navigation
+        </div>
+      </div>
 
       {/* Ambient environment overlay for readability */}
       <div className="fixed inset-0 pointer-events-none bg-black/20" />
@@ -468,8 +600,8 @@ export default function JournalBook() {
                     <OptimizedTextarea
                       value={displayContent}
                       onChange={handleContentChange}
-                      readOnly={isStoryMode}
-                      placeholder={isStoryMode ? "Generate a story first using the ✨ button" : "What is on your mind today?"}
+                      readOnly={isStoryMode || viewingMode}
+                      placeholder={isStoryMode ? "Generate a story first using the ✨ button" : viewingMode ? "This is a past entry (read-only)" : "What is on your mind today?"}
                       showStory={showStory}
                     />
                   </div>
@@ -552,6 +684,102 @@ export default function JournalBook() {
           </div>
         </div>
       </div>
+
+      {/* Calendar Modal */}
+      {showCalendar && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-[var(--c-cream)] rounded-lg shadow-2xl p-12 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            {/* Header: Year Navigation */}
+            <div className="flex items-center justify-between mb-8">
+              <button
+                onClick={() => setCalendarMonth(subMonths(calendarMonth, 12))}
+                className="p-3 text-xl hover:bg-[var(--c-gold)]/10 rounded transition-colors"
+                style={{ color: 'var(--c-ink)' }}
+              >
+                ← Year
+              </button>
+              <h2 className="text-3xl font-serif" style={{ color: 'var(--c-ink)' }}>
+                {format(calendarMonth, 'yyyy')}
+              </h2>
+              <button
+                onClick={() => setCalendarMonth(addMonths(calendarMonth, 12))}
+                className="p-3 text-xl hover:bg-[var(--c-gold)]/10 rounded transition-colors"
+                style={{ color: 'var(--c-ink)' }}
+              >
+                Year →
+              </button>
+            </div>
+
+            {/* Month Navigation */}
+            <div className="flex items-center justify-between mb-8">
+              <button
+                onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
+                className="p-3 text-xl hover:bg-[var(--c-gold)]/10 rounded transition-colors"
+                style={{ color: 'var(--c-ink)' }}
+              >
+                ←
+              </button>
+              <h3 className="text-2xl font-serif" style={{ color: 'var(--c-ink)' }}>
+                {format(calendarMonth, 'MMMM')}
+              </h3>
+              <button
+                onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
+                className="p-3 text-xl hover:bg-[var(--c-gold)]/10 rounded transition-colors"
+                style={{ color: 'var(--c-ink)' }}
+              >
+                →
+              </button>
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="mb-8">
+              {renderCalendarGrid()}
+            </div>
+
+            {/* Bottom Buttons */}
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => {
+                  const today = new Date();
+                  setCurrentDate(today);
+                  setCalendarMonth(today);
+                  setViewingMode(entries.has(format(today, "yyyy-MM-dd")));
+                  setShowCalendar(false);
+                }}
+                className="px-8 py-4 font-serif text-lg rounded-sm transition-opacity"
+                style={{
+                  backgroundColor: 'var(--c-gold)',
+                  color: 'var(--c-ink)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '0.8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                }}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setShowCalendar(false)}
+                className="px-8 py-4 font-serif text-lg rounded-sm transition-opacity"
+                style={{
+                  backgroundColor: 'var(--c-ink)',
+                  color: 'var(--c-cream)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '0.8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
