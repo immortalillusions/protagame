@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { format, addDays, subDays } from "date-fns";
 import Image from "next/image";
+import { Mic, CirclePause, CirclePlay } from "lucide-react";
 import GenerateStory from "../app/components/summary/generateStory";
 import JournalEditor from "./JournalEditor";
-import Calendar from "../app/components/calendar/Calendar";
+import Calendar from "../app/components/calendar/calendar";
 
 // Audio hook for managing sounds
 function useAudio() {
@@ -213,9 +214,12 @@ export default function JournalBook() {
   const [showStory, setShowStory] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [pendingSaves, setPendingSaves] = useState(new Set<string>());
+  const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [entriesWithContent, setEntriesWithContent] = useState<Set<string>>(
     new Set(),
   );
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Audio hook (includes narration)
   const {
@@ -436,7 +440,32 @@ export default function JournalBook() {
       // Load new content in background without blocking UI
       loadJournalEntry(newDateStr);
     }
-  }, [currentDate, entries, loadJournalEntry, stopNarration]);
+  }, [currentDate, entries, loadJournalEntry]);
+
+  // Load all entry dates for calendar indicators
+  useEffect(() => {
+    const loadEntryDates = async () => {
+      try {
+        const response = await fetch("/api/journal/list");
+        const data = await response.json();
+
+        if (data.success && data.entries) {
+          const dates = new Set<string>(
+            data.entries
+              .filter(
+                (entry: JournalEntry) => entry.content && entry.content.trim(),
+              )
+              .map((entry: JournalEntry) => entry.date),
+          );
+          setEntriesWithContent(dates);
+        }
+      } catch (error) {
+        console.error("Failed to load entry dates:", error);
+      }
+    };
+
+    loadEntryDates();
+  }, [lastSaved]); // Refresh when entries are saved
 
   const generateMedia = async () => {
     if (!localContent.trim()) {
@@ -623,29 +652,136 @@ export default function JournalBook() {
     [dateStr, localContent, currentEntry],
   );
 
-  // Handle narration toggle
-  const handleNarrationToggle = useCallback(() => {
-    if (isNarrating) {
-      stopNarration();
-    } else {
-      const textToNarrate = showStory
-        ? currentEntry?.story || ""
-        : localContent;
-      if (textToNarrate.trim()) {
-        playNarration(textToNarrate, dateStr);
-      } else {
-        alert("Please write something first!");
-      }
+  // Handle text-to-speech generation and playback
+  const handleGenerateSpeech = useCallback(async () => {
+    if (!currentEntry?.story || !currentEntry.story.trim()) {
+      alert("No story content to read!");
+      return;
     }
-  }, [
-    isNarrating,
-    stopNarration,
-    showStory,
-    currentEntry?.story,
-    localContent,
-    playNarration,
-    dateStr,
-  ]);
+
+    setIsGeneratingSpeech(true);
+
+    try {
+      // Stop any currently playing audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setIsPlayingAudio(false);
+      }
+
+      const response = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: currentEntry.story,
+          date: dateStr, // Pass the date to save audio to database
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate speech");
+      }
+
+      // Convert response to blob and create audio URL
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Update the current entry with the audio URL
+      setEntries((prev) => {
+        const updated = new Map(prev);
+        const existing = updated.get(dateStr);
+        if (existing) {
+          updated.set(dateStr, {
+            ...existing,
+            audioUrl: audioUrl,
+            audioFormat: "mp3",
+            audioGenerated: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        return updated;
+      });
+
+      // Create and configure audio element
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.onplay = () => setIsPlayingAudio(true);
+        audioRef.current.onpause = () => setIsPlayingAudio(false);
+        audioRef.current.onended = () => {
+          setIsPlayingAudio(false);
+          URL.revokeObjectURL(audioUrl); // Clean up object URL
+        };
+
+        // Start playing automatically after generation
+        await audioRef.current.play();
+      }
+    } catch (error) {
+      console.error("Speech generation failed:", error);
+      // Check for ElevenLabs credit/quota errors
+      if (
+        error instanceof Error &&
+        (error.message.includes("credits") ||
+          error.message.includes("quota") ||
+          error.message.includes("billing") ||
+          error.message.includes("insufficient funds") ||
+          error.message.includes("balance") ||
+          error.message.includes("subscription"))
+      ) {
+        alert(
+          "⚠️ ElevenLabs Credits Exhausted!\n\nYour ElevenLabs account has run out of credits. Please add more credits to continue generating voice narrations.\n\nVisit: https://elevenlabs.io/subscription",
+        );
+      } else {
+        alert("Failed to generate speech. Please try again.");
+      }
+    } finally {
+      setIsGeneratingSpeech(false);
+    }
+  }, [currentEntry?.story, dateStr]);
+
+  // Handle audio play/pause toggle
+  const toggleAudioPlayback = useCallback(() => {
+    if (!audioRef.current) return;
+
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch((error) => {
+        console.error("Failed to resume audio playback:", error);
+      });
+    }
+  }, [isPlayingAudio]);
+
+  // Handle date selection from calendar
+  const handleCalendarDateSelect = useCallback(
+    (date: Date) => {
+      // Play page flip sound
+      playPageFlip();
+
+      // Save current content before navigating if there are unsaved changes
+      if (
+        localContent.trim() &&
+        localContent !== (currentEntry?.content || "")
+      ) {
+        fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent.trim(),
+            story: currentEntry?.story,
+            visualPrompt: currentEntry?.visualPrompt,
+            mediaUrl: currentEntry?.mediaUrl,
+          }),
+        }).catch((error) => {
+          console.error("Failed to save before navigation:", error);
+        });
+      }
+
+      setCurrentDate(date);
+    },
+    [localContent, currentEntry, dateStr, playPageFlip],
+  );
 
   // Get display content based on current mode
   const displayContent = showStory ? currentEntry?.story || "" : localContent;
@@ -663,16 +799,7 @@ export default function JournalBook() {
       : "Unsaved changes";
 
   return (
-    <div
-      className="min-h-screen p-8 flex items-center justify-center overflow-hidden relative"
-      style={{
-        backgroundImage: "url(/desk.jpg)",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        backgroundAttachment: "fixed",
-      }}
-    >
+    <div className="min-h-screen p-8 flex items-center justify-center overflow-hidden relative bg-[#E6E2D6]">
       {/* Generate Story Button - Floating Top Left */}
       <GenerateStory
         currentDate={currentDate}
@@ -680,7 +807,6 @@ export default function JournalBook() {
         currentJournalContent={localContent}
       />
 
-      {/* Music Toggle Button - Bottom Right */}
       {/* Calendar - Top Right */}
       <Calendar
         currentDate={currentDate}
@@ -913,6 +1039,43 @@ export default function JournalBook() {
                     >
                       Journal
                     </button>
+
+                    {/* Voice Button - Only show when on Story tab and story exists */}
+                    {showStory && currentEntry?.story && (
+                      <button
+                        onClick={
+                          currentEntry?.audioUrl
+                            ? toggleAudioPlayback
+                            : handleGenerateSpeech
+                        }
+                        disabled={isGeneratingSpeech}
+                        className="px-3 py-2 text-sm font-serif rounded-lg transition-all bg-purple-600/20 text-purple-800 hover:bg-purple-600/30 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-purple-600/30 hover:border-purple-600/50"
+                        title={
+                          isGeneratingSpeech
+                            ? "Generating voice narration..."
+                            : currentEntry?.audioUrl
+                              ? isPlayingAudio
+                                ? "Pause narration"
+                                : "Play narration"
+                              : "Generate voice narration"
+                        }
+                      >
+                        {isGeneratingSpeech ? (
+                          <>
+                            <Mic className="w-4 h-4 animate-spin" />
+                            ...
+                          </>
+                        ) : currentEntry?.audioUrl ? (
+                          isPlayingAudio ? (
+                            <CirclePause className="w-4 h-4" />
+                          ) : (
+                            <CirclePlay className="w-4 h-4" />
+                          )
+                        ) : (
+                          <Mic className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-hidden">
