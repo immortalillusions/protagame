@@ -151,7 +151,6 @@ Make the writing engaging and creative.`;
               content: "", // No regular content for journey story
               story: data.story, // Save as story field
               createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
             }),
           });
           

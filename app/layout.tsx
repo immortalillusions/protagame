@@ -22,8 +22,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Protagame Journal",
-  description: "A premium 3D diary interface",
+  title: "ProtagaMe",
+  description: "Journals to Journey!",
 };
 
 export default function RootLayout({

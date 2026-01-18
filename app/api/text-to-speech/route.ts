@@ -71,7 +71,6 @@ export async function POST(request: NextRequest) {
             audioUrl: audioUrl,
             audioFormat: 'mp3',
             audioGenerated: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
           });
         }
       } catch (saveError) {
