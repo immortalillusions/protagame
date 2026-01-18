@@ -321,6 +321,12 @@ export default function JournalBook() {
       return;
     }
 
+    if (isGeneratingMedia) {
+      return; // Prevent multiple concurrent calls
+    }
+
+    setIsGeneratingMedia(true);
+
     try {
       const response = await fetch("/api/generate-media", {
         method: "POST",

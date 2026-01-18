@@ -458,7 +458,7 @@ Make the writing engaging and creative.`;
               <div className="relative group">
                 <button
                   onClick={downloadJourneyAsPDF}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 hover:shadow-lg transition-all flex items-center gap-2"
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg shadow-md hover:bg-red-700 hover:shadow-lg transition-all flex items-center gap-2"
                 >
                   📄 Download PDF
                 </button>
