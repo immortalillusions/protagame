@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { format, addDays, subDays } from "date-fns";
 import Image from "next/image";
 import GenerateStory from "../app/components/summary/generateStory";
+import JournalEditor from "./JournalEditor";
 
 interface VisualPrompt {
   visualPrompt: string;
@@ -29,7 +30,7 @@ const OptimizedTextarea = memo(function OptimizedTextarea({
   onChange,
   readOnly,
   placeholder,
-  showStory
+  showStory,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -37,11 +38,14 @@ const OptimizedTextarea = memo(function OptimizedTextarea({
   placeholder: string;
   showStory: boolean;
 }) {
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (!readOnly) {
-      onChange(e.target.value);
-    }
-  }, [onChange, readOnly]);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      if (!readOnly) {
+        onChange(e.target.value);
+      }
+    },
+    [onChange, readOnly],
+  );
 
   return (
     <textarea
@@ -51,7 +55,7 @@ const OptimizedTextarea = memo(function OptimizedTextarea({
       placeholder={placeholder}
       className={`w-full h-full bg-transparent border-none outline-none resize-none 
         font-serif text-xl leading-[2rem] text-[var(--c-ink)] placeholder-[var(--c-ink-light)]/40
-        selection:bg-[var(--c-gold)]/20 pl-8 pr-4 py-2 ${showStory ? 'cursor-default' : ''}`}
+        selection:bg-[var(--c-gold)]/20 pl-8 pr-4 py-2 ${showStory ? "cursor-default" : ""}`}
       style={{
         backgroundImage: `repeating-linear-gradient(
           transparent,
@@ -77,27 +81,27 @@ export default function JournalBook() {
 
   const dateStr = format(currentDate, "yyyy-MM-dd");
   const displayDate = format(currentDate, "MMMM d, yyyy");
-  
+
   // Get current entry from cache
   const currentEntry = entries.get(dateStr);
 
   // Debounced save function that doesn't block UI
   const debouncedSave = useMemo(() => {
     const timeouts = new Map<string, NodeJS.Timeout>();
-    
+
     return (date: string, content: string) => {
       // Clear existing timeout for this date
       const existingTimeout = timeouts.get(date);
       if (existingTimeout) {
         clearTimeout(existingTimeout);
       }
-      
+
       // Set new timeout for background save
       const timeout = setTimeout(async () => {
         if (!content.trim()) return;
-        
-        setPendingSaves(prev => new Set(prev).add(date));
-        
+
+        setPendingSaves((prev) => new Set(prev).add(date));
+
         try {
           const entry = entries.get(date);
           await fetch("/api/journal", {
@@ -111,95 +115,105 @@ export default function JournalBook() {
               mediaUrl: entry?.mediaUrl,
             }),
           });
-          
+
           setLastSaved(new Date());
         } catch (error) {
           console.error("Background save failed:", error);
         } finally {
-          setPendingSaves(prev => {
+          setPendingSaves((prev) => {
             const updated = new Set(prev);
             updated.delete(date);
             return updated;
           });
         }
-        
+
         timeouts.delete(date);
       }, 10000); // Save after 10 seconds of inactivity
-      
+
       timeouts.set(date, timeout);
     };
   }, [entries]);
-  
-  // Memoized handlers to prevent re-renders
-  const handleContentChange = useCallback((value: string) => {
-    setLocalContent(value);
-    
-    // Optimistically update the entry in memory
-    setEntries(prev => {
-      const updated = new Map(prev);
-      const existing = updated.get(dateStr);
-      if (existing) {
-        updated.set(dateStr, { ...existing, content: value, updatedAt: new Date().toISOString() });
-      } else {
-        updated.set(dateStr, {
-          date: dateStr,
-          content: value,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-      }
-      return updated;
-    });
 
-    // Debounced background save (non-blocking)
-    debouncedSave(dateStr, value);
-  }, [dateStr, debouncedSave]);
+  // Memoized handlers to prevent re-renders
+  const handleContentChange = useCallback(
+    (value: string) => {
+      setLocalContent(value);
+
+      // Optimistically update the entry in memory
+      setEntries((prev) => {
+        const updated = new Map(prev);
+        const existing = updated.get(dateStr);
+        if (existing) {
+          updated.set(dateStr, {
+            ...existing,
+            content: value,
+            updatedAt: new Date().toISOString(),
+          });
+        } else {
+          updated.set(dateStr, {
+            date: dateStr,
+            content: value,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        return updated;
+      });
+
+      // Debounced background save (non-blocking)
+      debouncedSave(dateStr, value);
+    },
+    [dateStr, debouncedSave],
+  );
 
   // Load journal entry for current date (only when date changes)
-  const loadJournalEntry = useCallback(async (date: string) => {
-    // Don't reload if we already have this entry
-    if (entries.has(date)) {
-      const entry = entries.get(date);
-      setLocalContent(entry?.content || "");
-      setShowStory(false);
-      return;
-    }
+  const loadJournalEntry = useCallback(
+    async (date: string) => {
+      // Don't reload if we already have this entry
+      if (entries.has(date)) {
+        const entry = entries.get(date);
+        setLocalContent(entry?.content || "");
+        setShowStory(false);
+        return;
+      }
 
-    // Background loading - don't block the UI
-    try {
-      const response = await fetch(`/api/journal?date=${date}`);
-      const data = await response.json();
+      // Background loading - don't block the UI
+      try {
+        const response = await fetch(`/api/journal?date=${date}`);
+        const data = await response.json();
 
-      if (data.success && data.entry) {
-        setEntries(prev => new Map(prev).set(date, data.entry));
-        // Only update localContent if we're still on the same date
-        if (format(currentDate, "yyyy-MM-dd") === date) {
-          setLocalContent(data.entry.content);
+        if (data.success && data.entry) {
+          setEntries((prev) => new Map(prev).set(date, data.entry));
+          // Only update localContent if we're still on the same date
+          if (format(currentDate, "yyyy-MM-dd") === date) {
+            setLocalContent(data.entry.content);
+          }
+        } else {
+          // Only clear content if we're still on the same date
+          if (format(currentDate, "yyyy-MM-dd") === date) {
+            setLocalContent("");
+          }
         }
-      } else {
-        // Only clear content if we're still on the same date
+        // Only reset showStory if we're still on the same date
+        if (format(currentDate, "yyyy-MM-dd") === date) {
+          setShowStory(false);
+        }
+      } catch (error) {
+        console.error("Failed to load journal entry:", error);
+        // Only clear content on error if we're still on the same date
         if (format(currentDate, "yyyy-MM-dd") === date) {
           setLocalContent("");
+          setShowStory(false);
         }
       }
-      // Only reset showStory if we're still on the same date
-      if (format(currentDate, "yyyy-MM-dd") === date) {
-        setShowStory(false);
-      }
-    } catch (error) {
-      console.error("Failed to load journal entry:", error);
-      // Only clear content on error if we're still on the same date
-      if (format(currentDate, "yyyy-MM-dd") === date) {
-        setLocalContent("");
-        setShowStory(false);
-      }
-    }
-  }, [entries, currentDate]);
+    },
+    [entries, currentDate],
+  );
 
   // Load data when date changes
   useEffect(() => {
     const newDateStr = format(currentDate, "yyyy-MM-dd");
-    
+
     // Immediately update UI with cached content or empty content
     const cachedEntry = entries.get(newDateStr);
     if (cachedEntry) {
@@ -221,7 +235,6 @@ export default function JournalBook() {
       return;
     }
 
-    setIsGeneratingMedia(true);
     try {
       const response = await fetch("/api/generate-media", {
         method: "POST",
@@ -236,21 +249,21 @@ export default function JournalBook() {
 
       if (data.success && data.visualPrompt) {
         // Optimistically update the entry in memory
-        setEntries(prev => {
+        setEntries((prev) => {
           const updated = new Map(prev);
           const existing = updated.get(dateStr) || {
             date: dateStr,
             content: localContent.trim(),
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
           };
-          
+
           updated.set(dateStr, {
             ...existing,
             content: localContent.trim(),
             visualPrompt: data.visualPrompt,
             mediaUrl: data.mediaUrl || existing.mediaUrl,
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
           });
           return updated;
         });
@@ -271,7 +284,10 @@ export default function JournalBook() {
         if (saveResponse.ok) {
           setLastSaved(new Date());
         } else {
-          console.error("Failed to save media generation:", await saveResponse.text());
+          console.error(
+            "Failed to save media generation:",
+            await saveResponse.text(),
+          );
         }
       } else {
         alert(data.error || "Failed to generate media");
@@ -284,86 +300,95 @@ export default function JournalBook() {
     }
   };
 
-  const navigateDate = useCallback((direction: "prev" | "next") => {
-    // Save current content before navigating if there are unsaved changes
-    if (localContent.trim() && localContent !== (currentEntry?.content || "")) {
-      // Background save - don't block navigation
-      fetch("/api/journal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: dateStr,
-          content: localContent.trim(),
-          story: currentEntry?.story,
-          visualPrompt: currentEntry?.visualPrompt,
-          mediaUrl: currentEntry?.mediaUrl,
-        }),
-      }).catch(error => {
-        console.error("Failed to save before navigation:", error);
-      });
-    }
+  const navigateDate = useCallback(
+    (direction: "prev" | "next") => {
+      // Save current content before navigating if there are unsaved changes
+      if (
+        localContent.trim() &&
+        localContent !== (currentEntry?.content || "")
+      ) {
+        // Background save - don't block navigation
+        fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent.trim(),
+            story: currentEntry?.story,
+            visualPrompt: currentEntry?.visualPrompt,
+            mediaUrl: currentEntry?.mediaUrl,
+          }),
+        }).catch((error) => {
+          console.error("Failed to save before navigation:", error);
+        });
+      }
 
-    // Navigate immediately - completely instant, no await/async
-    if (direction === "prev") {
-      setCurrentDate(subDays(currentDate, 1));
-    } else {
-      setCurrentDate(addDays(currentDate, 1));
-    }
-  }, [localContent, currentEntry, dateStr, currentDate]);
+      // Navigate immediately - completely instant, no await/async
+      if (direction === "prev") {
+        setCurrentDate((prev) => subDays(prev, 1));
+      } else {
+        setCurrentDate((prev) => addDays(prev, 1));
+      }
+    },
+    [localContent, currentEntry, dateStr, currentDate],
+  );
 
   // Handle story generated from GenerateStory component
-  const handleStoryGenerated = useCallback(async (story: string) => {
-    // Optimistically update the entry in memory
-    setEntries(prev => {
-      const updated = new Map(prev);
-      const existing = updated.get(dateStr) || {
-        date: dateStr,
-        content: localContent,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      updated.set(dateStr, {
-        ...existing,
-        story,
-        updatedAt: new Date().toISOString()
-      });
-      return updated;
-    });
-
-    // Switch to story view immediately
-    setShowStory(true);
-
-    // Save to backend in background
-    try {
-      await fetch("/api/journal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+  const handleStoryGenerated = useCallback(
+    async (story: string) => {
+      // Optimistically update the entry in memory
+      setEntries((prev) => {
+        const updated = new Map(prev);
+        const existing = updated.get(dateStr) || {
           date: dateStr,
           content: localContent,
-          story: story,
-          visualPrompt: currentEntry?.visualPrompt,
-          mediaUrl: currentEntry?.mediaUrl,
-        }),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        updated.set(dateStr, {
+          ...existing,
+          story,
+          updatedAt: new Date().toISOString(),
+        });
+        return updated;
       });
-      setLastSaved(new Date());
-    } catch (error) {
-      console.error("Failed to save story:", error);
-    }
-  }, [dateStr, localContent, currentEntry]);
+
+      // Switch to story view immediately
+      setShowStory(true);
+
+      // Save to backend in background
+      try {
+        await fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent,
+            story: story,
+            visualPrompt: currentEntry?.visualPrompt,
+            mediaUrl: currentEntry?.mediaUrl,
+          }),
+        });
+        setLastSaved(new Date());
+      } catch (error) {
+        console.error("Failed to save story:", error);
+      }
+    },
+    [dateStr, localContent, currentEntry],
+  );
 
   // Remove the auto-save useEffect entirely as it's handled by debounced save
 
   // Get display content based on current mode
-  const displayContent = showStory ? (currentEntry?.story || '') : localContent;
+  const displayContent = showStory ? currentEntry?.story || "" : localContent;
   const isStoryMode = showStory;
-  
+
   // Status indicators
   const isSaving = pendingSaves.has(dateStr);
   const characterCount = displayContent.length;
-  const statusText = isStoryMode ? '(story)' : '(journal)';
-  
+  const statusText = isStoryMode ? "(story)" : "(journal)";
+
   const saveStatusText = isSaving
     ? "Saving..."
     : lastSaved
@@ -399,7 +424,7 @@ export default function JournalBook() {
             {/* Content Container */}
             <div className="flex-1 pl-16 pr-12 pt-12 pb-0 flex flex-col relative">
               {/* Header: Date Navigation */}
-              <div className="flex items-center justify-between mb-10 pb-6 border-b border-[var(--c-gold)]/30">
+              <div className="flex items-center justify-between mb-10 pb-6 border-b border-[var(--c-gold)]/30 relative">
                 <button
                   onClick={() => navigateDate("prev")}
                   className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
@@ -438,19 +463,19 @@ export default function JournalBook() {
                       onClick={() => setShowStory(true)}
                       disabled={!currentEntry?.story}
                       className={`px-4 py-2 text-sm font-serif rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
-                        showStory 
-                          ? 'bg-[var(--c-gold)]/20 text-[var(--c-ink)] border-2 border-[var(--c-gold)]' 
-                          : 'text-[var(--c-ink-light)] hover:bg-[var(--c-gold)]/10'
+                        showStory
+                          ? "bg-[var(--c-gold)]/20 text-[var(--c-ink)] border-2 border-[var(--c-gold)]"
+                          : "text-[var(--c-ink-light)] hover:bg-[var(--c-gold)]/10"
                       }`}
                     >
-                      Story {!currentEntry?.story && '(Generate first)'}
+                      Story {!currentEntry?.story && "(Generate first)"}
                     </button>
                     <button
                       onClick={() => setShowStory(false)}
                       className={`px-4 py-2 text-sm font-serif rounded-lg transition-all ${
-                        !showStory 
-                          ? 'bg-[var(--c-gold)]/20 text-[var(--c-ink)] border-2 border-[var(--c-gold)]' 
-                          : 'text-[var(--c-ink-light)] hover:bg-[var(--c-gold)]/10'
+                        !showStory
+                          ? "bg-[var(--c-gold)]/20 text-[var(--c-ink)] border-2 border-[var(--c-gold)]"
+                          : "text-[var(--c-ink-light)] hover:bg-[var(--c-gold)]/10"
                       }`}
                     >
                       Journal
@@ -462,16 +487,18 @@ export default function JournalBook() {
                       value={displayContent}
                       onChange={handleContentChange}
                       readOnly={isStoryMode}
-                      placeholder={isStoryMode ? "Generate a story first using the ✨ button" : "What is on your mind today?"}
+                      placeholder={
+                        isStoryMode
+                          ? "Generate a story first using the ✨ button"
+                          : "What is on your mind today?"
+                      }
                       showStory={showStory}
                     />
                   </div>
 
                   {/* Status Bar inside the text column */}
                   <div className="mt-4 flex items-center justify-between text-xs font-serif text-[var(--c-ink-light)] italic opacity-60">
-                    <span>
-                      {saveStatusText}
-                    </span>
+                    <span>{saveStatusText}</span>
                     <span className="pl-4 font-mono opacity-60">
                       {characterCount} chars {statusText}
                     </span>
@@ -497,7 +524,10 @@ export default function JournalBook() {
                       <div className="flex-1 flex flex-col min-h-0">
                         <div className="flex-1 overflow-y-auto scrollbar-thin pr-2 mb-3">
                           <p className="pl-1 font-serif text-sm text-[var(--c-ink)] leading-relaxed text-center">
-                            {currentEntry.visualPrompt.visualPrompt.replace(/[.!?]+$/, '')}
+                            {currentEntry.visualPrompt.visualPrompt.replace(
+                              /[.!?]+$/,
+                              "",
+                            )}
                           </p>
                         </div>
                         <div className="flex justify-center pt-3 border-t border-[var(--c-tan)] flex-shrink-0">
