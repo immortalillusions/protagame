@@ -1,10 +1,67 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, memo } from "react";
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { format, addDays, subDays } from "date-fns";
 import Image from "next/image";
 import GenerateStory from "../app/components/summary/generateStory";
 import JournalEditor from "./JournalEditor";
+
+// Audio hook for managing sounds
+function useAudio() {
+  const pageFlipRef = useRef<HTMLAudioElement | null>(null);
+  const bgMusicRef = useRef<HTMLAudioElement | null>(null);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [isMusicLoaded, setIsMusicLoaded] = useState(false);
+
+  useEffect(() => {
+    // Initialize audio elements on client side only
+    pageFlipRef.current = new Audio("/sounds/page-flip.mp3");
+    pageFlipRef.current.volume = 0.5;
+
+    bgMusicRef.current = new Audio("/sounds/calm-music.mp3");
+    bgMusicRef.current.volume = 0.3;
+    bgMusicRef.current.loop = true;
+
+    bgMusicRef.current.addEventListener("canplaythrough", () => {
+      setIsMusicLoaded(true);
+    });
+
+    return () => {
+      if (bgMusicRef.current) {
+        bgMusicRef.current.pause();
+        bgMusicRef.current = null;
+      }
+      if (pageFlipRef.current) {
+        pageFlipRef.current = null;
+      }
+    };
+  }, []);
+
+  const playPageFlip = useCallback(() => {
+    if (pageFlipRef.current) {
+      pageFlipRef.current.currentTime = 0;
+      pageFlipRef.current.play().catch(() => {
+        // Ignore autoplay errors
+      });
+    }
+  }, []);
+
+  const toggleMusic = useCallback(() => {
+    if (!bgMusicRef.current) return;
+
+    if (isMusicPlaying) {
+      bgMusicRef.current.pause();
+      setIsMusicPlaying(false);
+    } else {
+      bgMusicRef.current.play().catch(() => {
+        // Ignore autoplay errors
+      });
+      setIsMusicPlaying(true);
+    }
+  }, [isMusicPlaying]);
+
+  return { playPageFlip, toggleMusic, isMusicPlaying, isMusicLoaded };
+}
 
 interface VisualPrompt {
   visualPrompt: string;
@@ -78,6 +135,10 @@ export default function JournalBook() {
   const [showStory, setShowStory] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [pendingSaves, setPendingSaves] = useState(new Set<string>());
+
+  // Audio hook
+  const { playPageFlip, toggleMusic, isMusicPlaying, isMusicLoaded } =
+    useAudio();
 
   const dateStr = format(currentDate, "yyyy-MM-dd");
   const displayDate = format(currentDate, "MMMM d, yyyy");
@@ -302,6 +363,9 @@ export default function JournalBook() {
 
   const navigateDate = useCallback(
     (direction: "prev" | "next") => {
+      // Play page flip sound
+      playPageFlip();
+
       // Save current content before navigating if there are unsaved changes
       if (
         localContent.trim() &&
@@ -330,7 +394,7 @@ export default function JournalBook() {
         setCurrentDate((prev) => addDays(prev, 1));
       }
     },
-    [localContent, currentEntry, dateStr, currentDate],
+    [localContent, currentEntry, dateStr, playPageFlip],
   );
 
   // Handle story generated from GenerateStory component
@@ -378,8 +442,6 @@ export default function JournalBook() {
     [dateStr, localContent, currentEntry],
   );
 
-  // Remove the auto-save useEffect entirely as it's handled by debounced save
-
   // Get display content based on current mode
   const displayContent = showStory ? currentEntry?.story || "" : localContent;
   const isStoryMode = showStory;
@@ -396,20 +458,84 @@ export default function JournalBook() {
       : "Unsaved changes";
 
   return (
-    <div className="min-h-screen p-8 flex items-center justify-center overflow-hidden relative"
-         style={{
-           backgroundImage: 'url(/desk.jpg)',
-           backgroundSize: 'cover',
-           backgroundPosition: 'center',
-           backgroundRepeat: 'no-repeat',
-           backgroundAttachment: 'fixed'
-         }}>
+    <div
+      className="min-h-screen p-8 flex items-center justify-center overflow-hidden relative"
+      style={{
+        backgroundImage: "url(/desk.jpg)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
+      }}
+    >
       {/* Generate Story Button - Floating */}
       <GenerateStory
         currentDate={currentDate}
         onStoryGenerated={handleStoryGenerated}
         currentJournalContent={localContent}
       />
+
+      {/* Music Toggle Button - Top Right */}
+      <button
+        onClick={toggleMusic}
+        className={`fixed right-6 bottom-6 z-[60] flex items-center justify-center w-14 h-14 rounded-full shadow-xl border-4 border-white/50 transition-all group pointer-events-auto ${
+          isMusicPlaying
+            ? "bg-amber-600 text-white"
+            : "bg-white/80 text-amber-800 hover:bg-amber-100"
+        }`}
+        title={isMusicPlaying ? "Pause Music" : "Play Calming Music"}
+      >
+        <span className="text-2xl">
+          {isMusicPlaying ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+              {/* Sound waves */}
+              <path d="M22 9c1.5 1.5 1.5 3 0 4.5" className="animate-pulse" />
+            </svg>
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+          )}
+        </span>
+
+        {/* Tooltip Label */}
+        <span className="absolute right-full mr-4 bg-black/75 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          {isMusicPlaying ? "Pause Music" : "Play Music"}
+        </span>
+
+        {/* Music playing indicator */}
+        {isMusicPlaying && (
+          <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
+          </span>
+        )}
+      </button>
 
       {/* Ambient environment overlay for readability */}
       <div className="fixed inset-0 pointer-events-none bg-black/20" />
@@ -434,7 +560,7 @@ export default function JournalBook() {
               <div className="flex items-center justify-between mb-10 pb-6 border-b border-[var(--c-gold)]/30 relative">
                 <button
                   onClick={() => navigateDate("prev")}
-                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
+                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click active:scale-95"
                   title="Previous day"
                 >
                   <span className="font-serif text-xl">←</span>
@@ -449,7 +575,7 @@ export default function JournalBook() {
 
                 <button
                   onClick={() => navigateDate("next")}
-                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click"
+                  className="p-3 text-[var(--c-ink-light)] hover:text-[var(--c-gold)] transition-colors lift-on-hover press-on-click active:scale-95"
                   title="Next day"
                   disabled={
                     format(currentDate, "yyyy-MM-dd") >=
