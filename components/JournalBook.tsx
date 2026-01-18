@@ -6,7 +6,6 @@ import Image from "next/image";
 import GenerateStory from "../app/components/summary/generateStory";
 import JournalEditor from "./JournalEditor";
 import Calendar from "../app/components/calendar/Calendar";
-import Calendar from "../app/components/calendar/Calendar";
 
 // Audio hook for managing sounds
 function useAudio() {
@@ -214,9 +213,6 @@ export default function JournalBook() {
   const [showStory, setShowStory] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [pendingSaves, setPendingSaves] = useState(new Set<string>());
-  const [entriesWithContent, setEntriesWithContent] = useState<Set<string>>(
-    new Set(),
-  );
   const [entriesWithContent, setEntriesWithContent] = useState<Set<string>>(
     new Set(),
   );
@@ -582,37 +578,6 @@ export default function JournalBook() {
     [localContent, currentEntry, dateStr, playPageFlip],
   );
 
-  // Handle date selection from calendar
-  const handleCalendarDateSelect = useCallback(
-    (date: Date) => {
-      // Play page flip sound
-      playPageFlip();
-
-      // Save current content before navigating if there are unsaved changes
-      if (
-        localContent.trim() &&
-        localContent !== (currentEntry?.content || "")
-      ) {
-        fetch("/api/journal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: dateStr,
-            content: localContent.trim(),
-            story: currentEntry?.story,
-            visualPrompt: currentEntry?.visualPrompt,
-            mediaUrl: currentEntry?.mediaUrl,
-          }),
-        }).catch((error) => {
-          console.error("Failed to save before navigation:", error);
-        });
-      }
-
-      setCurrentDate(date);
-    },
-    [localContent, currentEntry, dateStr, playPageFlip],
-  );
-
   // Handle story generated from GenerateStory component
   const handleStoryGenerated = useCallback(
     async (story: string) => {
@@ -713,13 +678,6 @@ export default function JournalBook() {
         currentDate={currentDate}
         onStoryGenerated={handleStoryGenerated}
         currentJournalContent={localContent}
-      />
-
-      {/* Calendar - Top Right */}
-      <Calendar
-        currentDate={currentDate}
-        onDateSelect={handleCalendarDateSelect}
-        entriesWithContent={entriesWithContent}
       />
 
       {/* Music Toggle Button - Bottom Right */}
