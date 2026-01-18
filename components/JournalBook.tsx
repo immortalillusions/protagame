@@ -6,6 +6,7 @@ import Image from "next/image";
 import GenerateStory from "../app/components/summary/generateStory";
 import JournalEditor from "./JournalEditor";
 import Calendar from "../app/components/calendar/Calendar";
+import Calendar from "../app/components/calendar/Calendar";
 
 // Audio hook for managing sounds
 function useAudio() {
@@ -216,6 +217,9 @@ export default function JournalBook() {
   const [entriesWithContent, setEntriesWithContent] = useState<Set<string>>(
     new Set(),
   );
+  const [entriesWithContent, setEntriesWithContent] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Audio hook (includes narration)
   const {
@@ -234,6 +238,31 @@ export default function JournalBook() {
 
   // Get current entry from cache
   const currentEntry = entries.get(dateStr);
+
+  // Load all entry dates for calendar indicators
+  useEffect(() => {
+    const loadEntryDates = async () => {
+      try {
+        const response = await fetch("/api/journal/list");
+        const data = await response.json();
+
+        if (data.success && data.entries) {
+          const dates = new Set<string>(
+            data.entries
+              .filter(
+                (entry: JournalEntry) => entry.content && entry.content.trim(),
+              )
+              .map((entry: JournalEntry) => entry.date),
+          );
+          setEntriesWithContent(dates);
+        }
+      } catch (error) {
+        console.error("Failed to load entry dates:", error);
+      }
+    };
+
+    loadEntryDates();
+  }, [lastSaved]); // Refresh when entries are saved
 
   // Load all entry dates for calendar indicators
   useEffect(() => {
@@ -292,6 +321,9 @@ export default function JournalBook() {
           });
 
           setLastSaved(new Date());
+
+          // Update entriesWithContent
+          setEntriesWithContent((prev) => new Set(prev).add(date));
 
           // Update entriesWithContent
           setEntriesWithContent((prev) => new Set(prev).add(date));
@@ -550,6 +582,37 @@ export default function JournalBook() {
     [localContent, currentEntry, dateStr, playPageFlip],
   );
 
+  // Handle date selection from calendar
+  const handleCalendarDateSelect = useCallback(
+    (date: Date) => {
+      // Play page flip sound
+      playPageFlip();
+
+      // Save current content before navigating if there are unsaved changes
+      if (
+        localContent.trim() &&
+        localContent !== (currentEntry?.content || "")
+      ) {
+        fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent.trim(),
+            story: currentEntry?.story,
+            visualPrompt: currentEntry?.visualPrompt,
+            mediaUrl: currentEntry?.mediaUrl,
+          }),
+        }).catch((error) => {
+          console.error("Failed to save before navigation:", error);
+        });
+      }
+
+      setCurrentDate(date);
+    },
+    [localContent, currentEntry, dateStr, playPageFlip],
+  );
+
   // Handle story generated from GenerateStory component
   const handleStoryGenerated = useCallback(
     async (story: string) => {
@@ -652,6 +715,14 @@ export default function JournalBook() {
         currentJournalContent={localContent}
       />
 
+      {/* Calendar - Top Right */}
+      <Calendar
+        currentDate={currentDate}
+        onDateSelect={handleCalendarDateSelect}
+        entriesWithContent={entriesWithContent}
+      />
+
+      {/* Music Toggle Button - Bottom Right */}
       {/* Calendar - Top Right */}
       <Calendar
         currentDate={currentDate}
