@@ -416,8 +416,6 @@ export default function JournalBook() {
       return;
     }
 
-    setIsGeneratingMedia(true);
-
     try {
       const response = await fetch("/api/generate-media", {
         method: "POST",
@@ -594,30 +592,6 @@ export default function JournalBook() {
     },
     [dateStr, localContent, currentEntry],
   );
-
-  // Handle narration toggle
-  const handleNarrationToggle = useCallback(() => {
-    if (isNarrating) {
-      stopNarration();
-    } else {
-      const textToNarrate = showStory
-        ? currentEntry?.story || ""
-        : localContent;
-      if (textToNarrate.trim()) {
-        playNarration(textToNarrate, dateStr);
-      } else {
-        alert("Please write something first!");
-      }
-    }
-  }, [
-    isNarrating,
-    stopNarration,
-    showStory,
-    currentEntry?.story,
-    localContent,
-    playNarration,
-    dateStr,
-  ]);
 
   // Get display content based on current mode
   const displayContent = showStory ? currentEntry?.story || "" : localContent;
