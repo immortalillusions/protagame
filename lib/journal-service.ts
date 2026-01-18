@@ -13,6 +13,7 @@ export interface JournalEntry {
   _id?: ObjectId;
   date: string;
   content: string;
+  story?: string;
   visualPrompt?: VisualPrompt;
   mediaUrl?: string;
   createdAt: Date;
@@ -77,6 +78,27 @@ class JournalService {
       .find({})
       .sort({ date: -1 })
       .toArray();
+  }
+
+  // Get all entries formatted for story generation (sorted chronologically)
+  static async getAllEntriesForStory(): Promise<string> {
+    const collection = await this.getCollection();
+    const entries = await collection
+      .find({ date: { $ne: "journey-story" } }) // Exclude journey story entries
+      .sort({ date: 1 }) // Sort chronologically for story
+      .toArray();
+    
+    return entries
+      .map(entry => {
+        const date = new Date(entry.date).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        return `**${date}**\n${entry.content}\n`;
+      })
+      .join('\n');
   }
 
   // Get entries within a date range

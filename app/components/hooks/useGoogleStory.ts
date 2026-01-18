@@ -97,7 +97,7 @@ export function useGoogleStory() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: prompt,
-          model: "google/gemini-flash-1.5",
+          model: "google/gemini-3-flash-preview",
         }),
       });
 

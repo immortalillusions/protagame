@@ -12,6 +12,7 @@ export interface VisualPrompt {
 export interface JournalEntry {
   date: string;
   content: string;
+  story?: string;
   visualPrompt?: VisualPrompt;
   mediaUrl?: string;
   createdAt: string;
@@ -209,6 +210,38 @@ class JsonJournalService {
         newest: dates[dates.length - 1]
       }
     };
+  }
+
+  // Get all entries formatted for story generation
+  static async getAllEntriesForStory(): Promise<string> {
+    try {
+      const allEntries = await this.getAllEntries();
+      
+      if (allEntries.length === 0) {
+        return "No journal entries found.";
+      }
+      
+      // Sort entries by date ascending (oldest first) for chronological story
+      const sortedEntries = allEntries.sort((a, b) => a.date.localeCompare(b.date));
+      
+      // Format entries for story generation
+      const formattedEntries = sortedEntries
+        .filter(entry => entry.content && entry.content.trim())
+        .map(entry => {
+          const date = new Date(entry.date).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric', 
+            year: 'numeric'
+          });
+          return `${date}: ${entry.content.trim()}`;
+        })
+        .join('\n\n');
+      
+      return formattedEntries;
+    } catch (error) {
+      console.error('Failed to get entries for story:', error);
+      return "Error retrieving journal entries.";
+    }
   }
 }
 

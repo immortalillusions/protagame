@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AIMediaPipeline, MediaGenerationResult } from '@/lib/ai-pipeline';
-import JsonJournalService from '@/lib/json-journal-service';
+import JournalService from '@/lib/journal-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,10 +56,14 @@ export async function POST(request: NextRequest) {
         console.log('Generated visual prompt:', JSON.stringify(result.visualPrompt, null, 2));
         console.log('Generated media URL:', result.mediaUrl || 'null/undefined');
         
+        // Get existing entry to preserve story content
+        const existingEntry = await JournalService.getEntryByDate(date);
+        
         // First, ensure the journal entry exists by saving it with the content
-        const savedEntry = await JsonJournalService.saveEntry({
+        const savedEntry = await JournalService.saveEntry({
           date,
           content: journalEntry.trim(),
+          story: existingEntry?.story, // Preserve existing story
           visualPrompt: result.visualPrompt,
           mediaUrl: result.mediaUrl
         });

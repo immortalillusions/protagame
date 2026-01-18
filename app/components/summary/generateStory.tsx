@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 
 interface GenerateStoryProps {
@@ -16,9 +16,11 @@ export default function GenerateStory({
 }: GenerateStoryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingJourney, setIsGeneratingJourney] = useState(false);
+  const [journeyStory, setJourneyStory] = useState<string>('');
+  const [showJourneyOverlay, setShowJourneyOverlay] = useState(false);
 
-  // Form State
-  const [selectedRange, setSelectedRange] = useState("current");
+  // Form State - removed selectedRange, always use "current" (today)
   const [genre, setGenre] = useState("Fantasy");
   const [mood, setMood] = useState("Mysterious");
   const [styleValue, setStyleValue] = useState(50);
@@ -43,6 +45,24 @@ export default function GenerateStory({
     }
   };
 
+  // Load journey story on component mount
+  useEffect(() => {
+    const loadJourneyStory = async () => {
+      try {
+        const response = await fetch("/api/journal?date=journey-story");
+        const data = await response.json();
+        
+        if (data.success && data.entry && data.entry.story) {
+          setJourneyStory(data.entry.story);
+        }
+      } catch (error) {
+        console.error("Failed to load journey story:", error);
+      }
+    };
+    
+    loadJourneyStory();
+  }, []);
+
   const handleGenerate = async () => {
     setIsGenerating(true);
 
@@ -57,7 +77,7 @@ Parameters:
 - Genre: ${genre}
 - Mood: ${mood}
 - Style: ${style}
-- Focus: ${selectedRange === "current" ? "Events of this specific day" : "A summary of recent events"}
+- Focus: Events of this specific day (today)
 - Length: ${lengthInstruction}
 
 IMPORTANT: You MUST follow the length instruction. ${length === "short" ? "Keep it under 120 words." : length === "long" ? "Write at least 450 words, up to 550 words. Be detailed and immersive." : "Write between 200-300 words."}
@@ -74,7 +94,7 @@ Make the writing engaging and creative.`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: prompt,
-          model: "google/gemini-flash-1.5",
+          model: "google/gemini-3-flash-preview",
         }),
       });
 
@@ -88,6 +108,61 @@ Make the writing engaging and creative.`;
       console.error("Failed to generate story:", error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateJourney = async () => {
+    setIsGeneratingJourney(true);
+
+    try {
+      const style = getStyleLabel(styleValue);
+
+      const response = await fetch("/api/journey-story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          genre,
+          mood,
+          style,
+          length: "long",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.story) {
+        setJourneyStory(data.story);
+        
+        // Save the journey story to a separate file
+        try {
+          const saveResponse = await fetch("/api/journal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              date: "journey-story", // Special date key for journey story
+              content: "", // No regular content for journey story
+              story: data.story, // Save as story field
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }),
+          });
+          
+          if (!saveResponse.ok) {
+            console.error("Failed to save journey story:", await saveResponse.text());
+          }
+        } catch (saveError) {
+          console.error("Failed to save journey story:", saveError);
+        }
+        
+        setIsOpen(false);
+      } else {
+        alert(data.error || "Failed to generate journey story");
+      }
+    } catch (error) {
+      console.error("Failed to generate journey story:", error);
+      alert("Failed to generate journey story");
+    } finally {
+      setIsGeneratingJourney(false);
     }
   };
 
@@ -107,36 +182,34 @@ Make the writing engaging and creative.`;
         </span>
       </button>
 
+      {/* Journey Story Toggle Button - Below main button */}
+      <button
+        onClick={() => setShowJourneyOverlay(true)}
+        disabled={!journeyStory}
+        className={`fixed left-6 top-24 z-[60] flex items-center justify-center w-14 h-14 rounded-full shadow-xl border-4 border-white/50 transition-all group pointer-events-auto ${
+          journeyStory 
+            ? 'bg-orange-500 text-white hover:scale-110 cursor-pointer' 
+            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+        }`}
+        title={journeyStory ? "View Journey Story" : "Generate a Journey Story first"}
+      >
+        <span className="text-2xl">📖</span>
+
+        {/* Tooltip Label */}
+        <span className="absolute left-full ml-4 bg-black/75 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          {journeyStory ? "View Journey Story" : "Generate Journey Story first"}
+        </span>
+      </button>
+
       {/* Modal Dialog */}
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm pointer-events-auto">
           <div className="bg-[#fdf6e9] border-2 border-amber-200 shadow-2xl max-w-md w-full p-6 rounded-xl relative max-h-[90vh] overflow-y-auto">
             <h3 className="font-serif text-2xl font-bold text-amber-900 mb-6 flex items-center gap-2">
-              <span>✨</span> Weaver's Inspiration
+              <span>~</span> Your Story
             </h3>
 
             <div className="space-y-6">
-              {/* Range Selection */}
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-amber-800">
-                  Context Range
-                </label>
-                <div className="flex gap-2 w-full">
-                  <button
-                    className={`flex-1 py-2 px-4 rounded-lg border transition-colors ${selectedRange === "current" ? "bg-amber-600 text-white border-amber-600" : "border-amber-300 text-amber-900 hover:bg-amber-100"}`}
-                    onClick={() => setSelectedRange("current")}
-                  >
-                    Today
-                  </button>
-                  <button
-                    className={`flex-1 py-2 px-4 rounded-lg border transition-colors ${selectedRange === "week" ? "bg-amber-600 text-white border-amber-600" : "border-amber-300 text-amber-900 hover:bg-amber-100"}`}
-                    onClick={() => setSelectedRange("week")}
-                  >
-                    This Week
-                  </button>
-                </div>
-              </div>
-
               {/* Length Selection */}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-semibold text-amber-800">
@@ -225,27 +298,90 @@ Make the writing engaging and creative.`;
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 mt-8">
-              <button
-                className="px-4 py-2 text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
-                onClick={() => setIsOpen(false)}
-                disabled={isGenerating}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-6 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 hover:shadow-lg transition-all min-w-[120px] flex justify-center items-center disabled:opacity-50"
-                onClick={handleGenerate}
-                disabled={isGenerating}
-              >
-                {isGenerating ? "Generating..." : "✨ Generate"}
-              </button>
+            <div className="flex flex-col gap-4 mt-8">
+              {/* Journey Story Button with tooltip */}
+              <div className="relative group">
+                <button
+                  className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg shadow-lg hover:shadow-xl transition-all relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed animate-pulse-border"
+                  onClick={handleGenerateJourney}
+                  disabled={isGeneratingJourney || isGenerating}
+                  title="Create a journey story from all your journal entries"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-indigo-400 animate-pulse opacity-20"></div>
+                  <span className="relative z-10 flex items-center justify-center gap-2 font-semibold">
+                    {isGeneratingJourney ? "Weaving Journey..." : "🌟 Create Journey Story"}
+                  </span>
+                </button>
+                
+                {/* Tooltip */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 -top-16 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                  Combines all your journal entries into one epic story
+                  <div className="absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                </div>
+              </div>
+
+              {/* Regular buttons */}
+              <div className="flex justify-end gap-3">
+                <button
+                  className="px-4 py-2 text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
+                  onClick={() => setIsOpen(false)}
+                  disabled={isGenerating || isGeneratingJourney}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-6 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 hover:shadow-lg transition-all min-w-[120px] flex justify-center items-center disabled:opacity-50"
+                  onClick={handleGenerate}
+                  disabled={isGenerating || isGeneratingJourney}
+                >
+                  {isGenerating ? "Generating..." : "✨ Generate"}
+                </button>
+              </div>
             </div>
 
             {/* Close button X */}
             <button
               onClick={() => setIsOpen(false)}
               className="absolute top-4 right-4 text-amber-800/50 hover:text-amber-800 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Journey Story Overlay */}
+      {showJourneyOverlay && journeyStory && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-auto"
+          style={{ zIndex: 99999 }}
+        >
+          <div className="bg-[#fdf6e9] border-2 border-orange-200 shadow-2xl max-w-4xl w-full mx-4 p-6 rounded-xl relative max-h-[90vh] overflow-hidden flex flex-col">
+            <h3 className="font-serif text-3xl font-bold text-orange-900 mb-4 flex items-center gap-2">
+              <span>📖</span> Your Journey Story
+            </h3>
+
+            {/* Story Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto bg-white/50 p-6 rounded-lg border border-orange-100 prose prose-lg max-w-none">
+              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                {journeyStory}
+              </div>
+            </div>
+
+            {/* Close button */}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                className="px-6 py-2 bg-orange-500 text-white rounded-lg shadow-md hover:bg-orange-600 hover:shadow-lg transition-all"
+                onClick={() => setShowJourneyOverlay(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Close button X */}
+            <button
+              onClick={() => setShowJourneyOverlay(false)}
+              className="absolute top-4 right-4 text-orange-800/50 hover:text-orange-800 transition-colors"
             >
               ✕
             </button>

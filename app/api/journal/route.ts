@@ -1,10 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import JsonJournalService from '@/lib/json-journal-service';
+import JournalService from '@/lib/journal-service';
 
 export async function POST(request: NextRequest) {
   try {
-    const { date, content, visualPrompt, mediaUrl } = await request.json();
+    const { date, content, story, visualPrompt, mediaUrl } = await request.json();
 
+    // Special case for journey stories - they don't need regular content
+    if (date === 'journey-story') {
+      if (!story) {
+        return NextResponse.json(
+          { error: 'Story content is required for journey stories' }, 
+          { status: 400 }
+        );
+      }
+      
+      const entry = await JournalService.saveEntry({
+        date,
+        content: '', // Empty content for journey stories
+        story,
+        visualPrompt,
+        mediaUrl
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Journey story saved successfully',
+        entry
+      });
+    }
+
+    // Regular journal entry validation
     if (!date || !content) {
       return NextResponse.json(
         { error: 'Date and content are required' }, 
@@ -12,9 +37,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const entry = await JsonJournalService.saveEntry({
+    const entry = await JournalService.saveEntry({
       date,
       content,
+      story,
       visualPrompt,
       mediaUrl
     });
@@ -46,7 +72,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const entry = await JsonJournalService.getEntryByDate(date);
+    const entry = await JournalService.getEntryByDate(date);
     
     return NextResponse.json({
       success: true,
