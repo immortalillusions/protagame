@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { format, addDays, subDays } from "date-fns";
 import Image from "next/image";
-import { Mic, CirclePause, CirclePlay } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Mic, CirclePause, CirclePlay, House } from "lucide-react";
 import GenerateStory from "../app/components/summary/generateStory";
 import JournalEditor from "./JournalEditor";
 import Calendar from "../app/components/calendar/calendar";
@@ -132,7 +133,12 @@ const OptimizedTextarea = memo(function OptimizedTextarea({
   );
 });
 
-export default function JournalBook() {
+interface JournalBookProps {
+  onGoHome?: () => void;
+}
+
+export default function JournalBook({ onGoHome }: JournalBookProps) {
+  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [entries, setEntries] = useState<Map<string, JournalEntry>>(new Map());
   const [localContent, setLocalContent] = useState(""); // Local state for immediate updates
@@ -713,6 +719,27 @@ export default function JournalBook() {
             <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
           </span>
         )}
+      </button>
+
+      {/* Home Button - Top Right, aligned with View Journey Story */}
+      <button
+        onClick={() => {
+          console.log('Home button clicked');
+          if (onGoHome) {
+            onGoHome();
+          } else {
+            router.push('/');
+          }
+        }}
+        className="fixed right-6 top-24 z-[60] flex items-center justify-center w-14 h-14 rounded-full shadow-xl border-4 border-white/50 transition-all group pointer-events-auto bg-white/80 text-amber-800 hover:bg-amber-100 hover:text-amber-800"
+        title="Go to Home"
+      >
+        <House className="w-6 h-6" />
+        
+        {/* Tooltip Label */}
+        <span className="absolute right-full mr-4 bg-black/75 text-white text-sm px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          Home
+        </span>
       </button>
 
       {/* Ambient environment overlay for readability */}

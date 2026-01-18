@@ -35,10 +35,17 @@ export default function Home() {
             animate={{ opacity: 1 }}
             transition={{ duration: 1.5, ease: "easeOut" }}
           >
-            <JournalBook />
+            <JournalBook onGoHome={() => setStage('landing')} />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Keep JournalBook mounted but hidden when not in app stage */}
+      {stage !== 'app' && (
+        <div className="absolute inset-0 z-0 opacity-0 pointer-events-none">
+          <JournalBook onGoHome={() => setStage('landing')} />
+        </div>
+      )}
     </main>
   );
 }
