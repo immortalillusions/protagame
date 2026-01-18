@@ -5,6 +5,7 @@ import { format, addDays, subDays } from "date-fns";
 import Image from "next/image";
 import GenerateStory from "../app/components/summary/generateStory";
 import JournalEditor from "./JournalEditor";
+import Calendar from "../app/components/calendar/Calendar";
 
 // Audio hook for managing sounds
 function useAudio() {
@@ -77,9 +78,6 @@ interface JournalEntry {
   story?: string;
   visualPrompt?: VisualPrompt;
   mediaUrl?: string;
-  audioUrl?: string;
-  audioFormat?: string;
-  audioGenerated?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -138,9 +136,9 @@ export default function JournalBook() {
   const [showStory, setShowStory] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [pendingSaves, setPendingSaves] = useState(new Set<string>());
-  const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [entriesWithContent, setEntriesWithContent] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Audio hook
   const { playPageFlip, toggleMusic, isMusicPlaying, isMusicLoaded } =
@@ -151,6 +149,31 @@ export default function JournalBook() {
 
   // Get current entry from cache
   const currentEntry = entries.get(dateStr);
+
+  // Load all entry dates for calendar indicators
+  useEffect(() => {
+    const loadEntryDates = async () => {
+      try {
+        const response = await fetch("/api/journal/list");
+        const data = await response.json();
+
+        if (data.success && data.entries) {
+          const dates = new Set<string>(
+            data.entries
+              .filter(
+                (entry: JournalEntry) => entry.content && entry.content.trim(),
+              )
+              .map((entry: JournalEntry) => entry.date),
+          );
+          setEntriesWithContent(dates);
+        }
+      } catch (error) {
+        console.error("Failed to load entry dates:", error);
+      }
+    };
+
+    loadEntryDates();
+  }, [lastSaved]); // Refresh when entries are saved
 
   // Debounced save function that doesn't block UI
   const debouncedSave = useMemo(() => {
@@ -184,6 +207,9 @@ export default function JournalBook() {
           });
 
           setLastSaved(new Date());
+
+          // Update entriesWithContent
+          setEntriesWithContent((prev) => new Set(prev).add(date));
         } catch (error) {
           console.error("Background save failed:", error);
         } finally {
@@ -241,16 +267,6 @@ export default function JournalBook() {
         const entry = entries.get(date);
         setLocalContent(entry?.content || "");
         setShowStory(false);
-        
-        // Load saved audio if available
-        if (entry?.audioUrl && audioRef.current) {
-          audioRef.current.src = entry.audioUrl;
-          // Set up event handlers for existing audio
-          audioRef.current.onplay = () => setIsPlayingAudio(true);
-          audioRef.current.onpause = () => setIsPlayingAudio(false);
-          audioRef.current.onended = () => setIsPlayingAudio(false);
-        }
-        
         return;
       }
 
@@ -264,15 +280,6 @@ export default function JournalBook() {
           // Only update localContent if we're still on the same date
           if (format(currentDate, "yyyy-MM-dd") === date) {
             setLocalContent(data.entry.content);
-            
-            // Load saved audio if available
-            if (data.entry.audioUrl && audioRef.current) {
-              audioRef.current.src = data.entry.audioUrl;
-              // Set up event handlers for existing audio
-              audioRef.current.onplay = () => setIsPlayingAudio(true);
-              audioRef.current.onpause = () => setIsPlayingAudio(false);
-              audioRef.current.onended = () => setIsPlayingAudio(false);
-            }
           }
         } else {
           // Only clear content if we're still on the same date
@@ -321,12 +328,6 @@ export default function JournalBook() {
       return;
     }
 
-    if (isGeneratingMedia) {
-      return; // Prevent multiple concurrent calls
-    }
-
-    setIsGeneratingMedia(true);
-
     try {
       const response = await fetch("/api/generate-media", {
         method: "POST",
@@ -360,20 +361,29 @@ export default function JournalBook() {
           return updated;
         });
 
-        // The /api/generate-media endpoint already saves to the database
-        setLastSaved(new Date());
-      } else {
-        // Check for OpenRouter credit errors
-        if (data.error && (
-          data.error.includes('credits') || 
-          data.error.includes('insufficient funds') || 
-          data.error.includes('billing') || 
-          data.error.includes('quota')
-        )) {
-          alert("⚠️ OpenRouter Credits Exhausted!\n\nYour OpenRouter account has run out of credits. Please add more credits to continue generating images.\n\nVisit: https://openrouter.ai/credits");
+        // Save to backend in background
+        const saveResponse = await fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent.trim(),
+            story: currentEntry?.story,
+            visualPrompt: data.visualPrompt,
+            mediaUrl: data.mediaUrl || currentEntry?.mediaUrl,
+          }),
+        });
+
+        if (saveResponse.ok) {
+          setLastSaved(new Date());
         } else {
-          alert(data.error || "Failed to generate media");
+          console.error(
+            "Failed to save media generation:",
+            await saveResponse.text(),
+          );
         }
+      } else {
+        alert(data.error || "Failed to generate media");
       }
     } catch (error) {
       console.error("Media generation failed:", error);
@@ -415,6 +425,37 @@ export default function JournalBook() {
       } else {
         setCurrentDate((prev) => addDays(prev, 1));
       }
+    },
+    [localContent, currentEntry, dateStr, playPageFlip],
+  );
+
+  // Handle date selection from calendar
+  const handleCalendarDateSelect = useCallback(
+    (date: Date) => {
+      // Play page flip sound
+      playPageFlip();
+
+      // Save current content before navigating if there are unsaved changes
+      if (
+        localContent.trim() &&
+        localContent !== (currentEntry?.content || "")
+      ) {
+        fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            content: localContent.trim(),
+            story: currentEntry?.story,
+            visualPrompt: currentEntry?.visualPrompt,
+            mediaUrl: currentEntry?.mediaUrl,
+          }),
+        }).catch((error) => {
+          console.error("Failed to save before navigation:", error);
+        });
+      }
+
+      setCurrentDate(date);
     },
     [localContent, currentEntry, dateStr, playPageFlip],
   );
@@ -464,104 +505,6 @@ export default function JournalBook() {
     [dateStr, localContent, currentEntry],
   );
 
-  // Handle text-to-speech generation and playback
-  const handleGenerateSpeech = useCallback(async () => {
-    if (!currentEntry?.story || !currentEntry.story.trim()) {
-      alert("No story content to read!");
-      return;
-    }
-
-    setIsGeneratingSpeech(true);
-    
-    try {
-      // Stop any currently playing audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        setIsPlayingAudio(false);
-      }
-
-      const response = await fetch("/api/text-to-speech", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: currentEntry.story,
-          date: dateStr, // Pass the date to save audio to database
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate speech");
-      }
-
-      // Convert response to blob and create audio URL
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Update the current entry with the audio URL
-      setEntries((prev) => {
-        const updated = new Map(prev);
-        const existing = updated.get(dateStr);
-        if (existing) {
-          updated.set(dateStr, {
-            ...existing,
-            audioUrl: audioUrl,
-            audioFormat: 'mp3',
-            audioGenerated: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-        }
-        return updated;
-      });
-
-      // Create and configure audio element
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.onplay = () => setIsPlayingAudio(true);
-        audioRef.current.onpause = () => setIsPlayingAudio(false);
-        audioRef.current.onended = () => {
-          setIsPlayingAudio(false);
-          URL.revokeObjectURL(audioUrl); // Clean up object URL
-        };
-        
-        // Start playing automatically after generation
-        await audioRef.current.play();
-      }
-
-    } catch (error) {
-      console.error("Speech generation failed:", error);
-      // Check for ElevenLabs credit/quota errors
-      if (error instanceof Error && (
-        error.message.includes('credits') || 
-        error.message.includes('quota') || 
-        error.message.includes('billing') || 
-        error.message.includes('insufficient funds') ||
-        error.message.includes('balance') ||
-        error.message.includes('subscription')
-      )) {
-        alert("⚠️ ElevenLabs Credits Exhausted!\n\nYour ElevenLabs account has run out of credits. Please add more credits to continue generating voice narrations.\n\nVisit: https://elevenlabs.io/subscription");
-      } else {
-        alert("Failed to generate speech. Please try again.");
-      }
-    } finally {
-      setIsGeneratingSpeech(false);
-    }
-  }, [currentEntry?.story, dateStr]);
-
-  // Handle audio play/pause toggle
-  const toggleAudioPlayback = useCallback(() => {
-    if (!audioRef.current) return;
-
-    if (isPlayingAudio) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play().catch((error) => {
-        console.error("Failed to resume audio playback:", error);
-      });
-    }
-  }, [isPlayingAudio]);
-
   // Get display content based on current mode
   const displayContent = showStory ? currentEntry?.story || "" : localContent;
   const isStoryMode = showStory;
@@ -595,7 +538,14 @@ export default function JournalBook() {
         currentJournalContent={localContent}
       />
 
-      {/* Music Toggle Button - Top Right */}
+      {/* Calendar - Top Right */}
+      <Calendar
+        currentDate={currentDate}
+        onDateSelect={handleCalendarDateSelect}
+        entriesWithContent={entriesWithContent}
+      />
+
+      {/* Music Toggle Button - Bottom Right */}
       <button
         onClick={toggleMusic}
         className={`fixed right-6 bottom-6 z-[60] flex items-center justify-center w-14 h-14 rounded-full shadow-xl border-4 border-white/50 transition-all group pointer-events-auto ${
@@ -659,9 +609,6 @@ export default function JournalBook() {
 
       {/* Ambient environment overlay for readability */}
       <div className="fixed inset-0 pointer-events-none bg-black/20" />
-
-      {/* Hidden audio element for speech playback */}
-      <audio ref={audioRef} preload="none" />
 
       <div className="max-w-6xl w-full mx-auto relative perspective-container z-10">
         {/* Book Container - The Physical Object */}
@@ -736,32 +683,6 @@ export default function JournalBook() {
                     >
                       Journal
                     </button>
-                    
-                    {/* Voice Button - Only show when on Story tab and story exists */}
-                    {showStory && currentEntry?.story && (
-                      <button
-                        onClick={currentEntry?.audioUrl ? toggleAudioPlayback : handleGenerateSpeech}
-                        disabled={isGeneratingSpeech}
-                        className="px-3 py-2 text-sm font-serif rounded-lg transition-all bg-purple-600/20 text-purple-800 hover:bg-purple-600/30 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-purple-600/30 hover:border-purple-600/50"
-                        title={
-                          isGeneratingSpeech
-                            ? "Generating voice narration..."
-                            : currentEntry?.audioUrl
-                            ? isPlayingAudio
-                              ? "Pause narration"
-                              : "Play narration"
-                            : "Generate voice narration"
-                        }
-                      >
-                        {isGeneratingSpeech 
-                          ? "🎤..." 
-                          : currentEntry?.audioUrl 
-                            ? isPlayingAudio 
-                              ? "⏸️" 
-                              : "▶️" 
-                            : "🎤"}
-                      </button>
-                    )}
                   </div>
 
                   <div className="flex-1 overflow-hidden">
