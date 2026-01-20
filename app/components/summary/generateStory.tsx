@@ -8,12 +8,14 @@ interface GenerateStoryProps {
   currentDate: Date;
   onStoryGenerated: (story: string) => void;
   currentJournalContent?: string;
+  hasAudioGenerated?: boolean;
 }
 
 export default function GenerateStory({
   currentDate,
   onStoryGenerated,
   currentJournalContent = "",
+  hasAudioGenerated = false,
 }: GenerateStoryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -414,16 +416,28 @@ Make the writing engaging and creative.`;
                 </button>
                 <div className="relative group">
                   <button
-                    className="px-6 py-2 bg-amber-600 text-white rounded-lg shadow-md hover:bg-amber-700 hover:shadow-lg transition-all min-w-[120px] flex justify-center items-center disabled:opacity-50"
+                    className={`px-6 py-2 rounded-lg shadow-md transition-all min-w-[120px] flex justify-center items-center ${
+                      hasAudioGenerated 
+                        ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
+                        : "bg-amber-600 text-white hover:bg-amber-700 hover:shadow-lg"
+                    } disabled:opacity-50`}
                     onClick={handleGenerate}
-                    disabled={isGenerating || isGeneratingJourney}
+                    disabled={isGenerating || isGeneratingJourney || hasAudioGenerated}
                   >
-                    {isGenerating ? "Generating..." : "Generate for Today"}
+                    {hasAudioGenerated 
+                      ? "Audio Generated ✓" 
+                      : isGenerating 
+                        ? "Generating..." 
+                        : "Generate for Today"
+                    }
                   </button>
                   
                   {/* Tooltip */}
                   <div className="absolute left-1/2 transform -translate-x-1/2 -top-12 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-[60]">
-                    Generate story for current day only
+                    {hasAudioGenerated 
+                      ? "Audio already generated for this day" 
+                      : "Generate story for current day only"
+                    }
                     <div className="absolute left-1/2 transform -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                   </div>
                 </div>

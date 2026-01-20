@@ -309,16 +309,36 @@ export default function JournalBook({ onGoHome }: JournalBookProps) {
   useEffect(() => {
     const newDateStr = format(currentDate, "yyyy-MM-dd");
 
+    // Stop any currently playing audio when switching dates
+    if (audioRef.current) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    }
+
     // Immediately update UI with cached content or empty content
     const cachedEntry = entries.get(newDateStr);
     if (cachedEntry) {
       // Use cached content immediately
       setLocalContent(cachedEntry.content);
       setShowStory(false);
+      
+      // Set up audio for the current day if it exists
+      if (cachedEntry.audioUrl && audioRef.current) {
+        audioRef.current.src = cachedEntry.audioUrl;
+        audioRef.current.onplay = () => setIsPlayingAudio(true);
+        audioRef.current.onpause = () => setIsPlayingAudio(false);
+        audioRef.current.onended = () => setIsPlayingAudio(false);
+      } else if (audioRef.current) {
+        // Clear audio if no audio for this day
+        audioRef.current.src = '';
+      }
     } else {
-      // Clear content immediately for new date, load in background
+      // Clear content and audio immediately for new date, load in background
       setLocalContent("");
       setShowStory(false);
+      if (audioRef.current) {
+        audioRef.current.src = '';
+      }
       // Load new content in background without blocking UI
       loadJournalEntry(newDateStr);
     }
@@ -585,7 +605,15 @@ export default function JournalBook({ onGoHome }: JournalBookProps) {
 
   // Handle audio play/pause toggle
   const toggleAudioPlayback = useCallback(() => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !currentEntry?.audioUrl) return;
+
+    // Ensure we're playing the current day's audio
+    if (audioRef.current.src !== currentEntry.audioUrl) {
+      audioRef.current.src = currentEntry.audioUrl;
+      audioRef.current.onplay = () => setIsPlayingAudio(true);
+      audioRef.current.onpause = () => setIsPlayingAudio(false);
+      audioRef.current.onended = () => setIsPlayingAudio(false);
+    }
 
     if (isPlayingAudio) {
       audioRef.current.pause();
@@ -594,7 +622,7 @@ export default function JournalBook({ onGoHome }: JournalBookProps) {
         console.error("Failed to resume audio playback:", error);
       });
     }
-  }, [isPlayingAudio]);
+  }, [isPlayingAudio, currentEntry?.audioUrl]);
 
   // Handle date selection from calendar
   const handleCalendarDateSelect = useCallback(
@@ -650,6 +678,7 @@ export default function JournalBook({ onGoHome }: JournalBookProps) {
         currentDate={currentDate}
         onStoryGenerated={handleStoryGenerated}
         currentJournalContent={localContent}
+        hasAudioGenerated={!!currentEntry?.audioUrl}
       />
 
       {/* Calendar - Top Right */}
